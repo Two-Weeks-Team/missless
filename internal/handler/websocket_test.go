@@ -3,11 +3,13 @@ package handler
 import (
 	"testing"
 
+	"github.com/Two-Weeks-Team/missless/internal/session"
 	"google.golang.org/genai"
 )
 
 func TestBuildOnboardingConfig(t *testing.T) {
-	cfg := buildOnboardingConfig()
+	mgr := session.NewManager("test-session")
+	cfg := mgr.BuildOnboardingConfig()
 
 	if cfg == nil {
 		t.Fatal("expected non-nil config")
@@ -70,7 +72,8 @@ func TestBuildOnboardingConfig(t *testing.T) {
 }
 
 func TestBuildOnboardingConfig_Modalities(t *testing.T) {
-	cfg := buildOnboardingConfig()
+	mgr := session.NewManager("test-session")
+	cfg := mgr.BuildOnboardingConfig()
 
 	hasAudio := false
 	hasText := false
