@@ -188,9 +188,14 @@ func (g *Generator) buildPrompt(prompt, mood, characters string) string {
 	// Add style guide for consistency
 	parts = append(parts, "Style: warm illustration, soft lighting, emotional, nostalgic reunion scene")
 
-	// Add last scene reference for continuity if available
 	anchor := g.getAnchor()
 	if anchor != nil {
+		// Add silhouette/back-view guide for character consistency.
+		if len(anchor.GetRefImages()) > 0 {
+			parts = append(parts, anchor.SilhouetteGuide())
+		}
+
+		// Add last scene reference for continuity if available.
 		lastScene := anchor.GetLastScene()
 		if lastScene != "" {
 			parts = append(parts, "Maintain visual continuity with previous scene")

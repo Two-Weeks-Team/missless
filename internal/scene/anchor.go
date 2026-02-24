@@ -2,9 +2,19 @@ package scene
 
 import (
 	"sync"
+
+	"google.golang.org/genai"
 )
 
 const maxRefImages = 5
+
+// silhouetteGuide is the prompt snippet for >70% silhouette/back-view rendering.
+const silhouetteGuide = `Character rendering guideline: Show the character predominantly from behind,
+as a silhouette, or in a three-quarter back view (>70% of the time).
+Use soft backlighting to create a recognizable outline.
+Avoid detailed frontal face rendering — instead convey identity through posture,
+hair, clothing silhouette, and body language.
+This maintains visual consistency while preserving emotional mystery.`
 
 // CharacterAnchor maintains visual consistency across scenes.
 // Lock ordering: CharacterAnchor.mu is Level 4.
@@ -54,4 +64,31 @@ func (a *CharacterAnchor) GetLastScene() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.LastSceneB64
+}
+
+// GetRefParts converts reference images into genai.Parts for multimodal prompts.
+// Returns nil if no reference images are stored.
+func (a *CharacterAnchor) GetRefParts() []*genai.Part {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	if len(a.RefImages) == 0 {
+		return nil
+	}
+
+	parts := make([]*genai.Part, 0, len(a.RefImages))
+	for _, img := range a.RefImages {
+		parts = append(parts, &genai.Part{
+			InlineData: &genai.Blob{
+				MIMEType: "image/jpeg",
+				Data:     img,
+			},
+		})
+	}
+	return parts
+}
+
+// SilhouetteGuide returns the prompt snippet for silhouette/back-view rendering.
+func (a *CharacterAnchor) SilhouetteGuide() string {
+	return silhouetteGuide
 }
