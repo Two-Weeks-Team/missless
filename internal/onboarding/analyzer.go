@@ -50,49 +50,19 @@ func NewAnalyzer(client *genai.Client) *Analyzer {
 // Only public videos are supported (unlisted → gallery fallback).
 func (a *Analyzer) AnalyzeYouTubeURL(ctx context.Context, videoURL, targetPerson string, progressFn func(string, int)) (*VideoAnalysis, error) {
 	slog.Info("youtube_analysis_start", "url", videoURL, "target", targetPerson)
-	progressFn("Analyzing video", 10)
-
-	prompt := buildAnalysisPrompt(targetPerson)
-
-	var result *VideoAnalysis
-	err := retry.WithBackoff(ctx, 3, func() error {
-		progressFn("Sending to Gemini", 20)
-
-		temp := float32(0.2)
-		resp, err := a.generate(ctx, analysisModel, []*genai.Content{
-			{Parts: []*genai.Part{
-				{FileData: &genai.FileData{FileURI: videoURL}},
-				genai.NewPartFromText(prompt),
-			}},
-		}, &genai.GenerateContentConfig{
-			ResponseMIMEType: "application/json",
-			Temperature:      &temp,
-		})
-		if err != nil {
-			return fmt.Errorf("gemini generate: %w", err)
-		}
-
-		progressFn("Parsing results", 70)
-
-		result, err = parseAnalysis(resp)
-		return err
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("youtube analysis failed: %w", err)
-	}
-
-	progressFn("Analysis complete", 90)
-	slog.Info("youtube_analysis_done", "url", videoURL)
-	return result, nil
+	return a.analyzeWithFileData(ctx, &genai.FileData{FileURI: videoURL}, targetPerson, progressFn)
 }
 
 // AnalyzeUploadedFile analyzes a file referenced by Gemini File API URI.
 // Used for gallery fallback when videos are unlisted/private.
 func (a *Analyzer) AnalyzeUploadedFile(ctx context.Context, fileURI, mimeType, targetPerson string, progressFn func(string, int)) (*VideoAnalysis, error) {
 	slog.Info("file_analysis_start", "uri", fileURI, "target", targetPerson)
-	progressFn("Analyzing uploaded file", 10)
+	return a.analyzeWithFileData(ctx, &genai.FileData{FileURI: fileURI, MIMEType: mimeType}, targetPerson, progressFn)
+}
 
+// analyzeWithFileData is the shared analysis logic for both YouTube URLs and uploaded files.
+func (a *Analyzer) analyzeWithFileData(ctx context.Context, fileData *genai.FileData, targetPerson string, progressFn func(string, int)) (*VideoAnalysis, error) {
+	progressFn("Preparing analysis", 10)
 	prompt := buildAnalysisPrompt(targetPerson)
 
 	var result *VideoAnalysis
@@ -102,7 +72,7 @@ func (a *Analyzer) AnalyzeUploadedFile(ctx context.Context, fileURI, mimeType, t
 		temp := float32(0.2)
 		resp, err := a.generate(ctx, analysisModel, []*genai.Content{
 			{Parts: []*genai.Part{
-				{FileData: &genai.FileData{FileURI: fileURI, MIMEType: mimeType}},
+				{FileData: fileData},
 				genai.NewPartFromText(prompt),
 			}},
 		}, &genai.GenerateContentConfig{
@@ -120,7 +90,7 @@ func (a *Analyzer) AnalyzeUploadedFile(ctx context.Context, fileURI, mimeType, t
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("file analysis failed: %w", err)
+		return nil, fmt.Errorf("analysis failed: %w", err)
 	}
 
 	progressFn("Analysis complete", 90)
