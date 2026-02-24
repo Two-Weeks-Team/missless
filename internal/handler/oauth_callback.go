@@ -122,8 +122,10 @@ func handleListVideos(w http.ResponseWriter, r *http.Request, deps *OAuthDeps) {
 	analyzable, needsUpload := media.ClassifyVideos(videos)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"analyzable":  analyzable,
 		"needsUpload": needsUpload,
-	})
+	}); err != nil {
+		slog.Error("youtube_response_encode_failed", "error", err)
+	}
 }
