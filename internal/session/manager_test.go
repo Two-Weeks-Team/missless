@@ -423,5 +423,27 @@ func TestBuildReunionConfig_NonKoreanLang(t *testing.T) {
 	}
 }
 
+func TestBuildReunionConfig_AffectiveRulesInInstruction(t *testing.T) {
+	mgr := NewManager("test-affective-rules")
+	mgr.SetPersona("Mom", "Sulafat", "ko", "Warm", "Gentle")
+
+	cfg := mgr.BuildReunionConfig()
+	sysText := cfg.SystemInstruction.Parts[0].Text
+
+	// Must contain affective dialog rules.
+	for _, keyword := range []string{"Affective Dialog", "tearful", "soften", "laughs"} {
+		if !strings.Contains(sysText, keyword) {
+			t.Fatalf("expected system instruction to contain %q", keyword)
+		}
+	}
+
+	// Must contain proactive audio rules.
+	for _, keyword := range []string{"Proactive Audio", "self-talk", "directly"} {
+		if !strings.Contains(sysText, keyword) {
+			t.Fatalf("expected system instruction to contain %q", keyword)
+		}
+	}
+}
+
 // Ensure unused import doesn't cause issues.
 var _ = time.Second
