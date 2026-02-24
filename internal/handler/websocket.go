@@ -5,9 +5,11 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/live"
+	"github.com/Two-Weeks-Team/missless/internal/retry"
 	"github.com/Two-Weeks-Team/missless/internal/session"
 	"github.com/gorilla/websocket"
 	"google.golang.org/genai"
@@ -70,9 +72,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config)
 	// Create tool handler
 	toolHandler := live.NewToolHandler()
 
-	// Connect to Live API with onboarding config
+	// Connect to Live API with onboarding config and retry
 	liveConfig := buildOnboardingConfig()
-	liveSession, err := client.Live.Connect(ctx, LiveModel, liveConfig)
+	var liveSession *genai.Session
+	err = retry.WithBackoff(ctx, 3, func() error {
+		var connectErr error
+		liveSession, connectErr = client.Live.Connect(ctx, LiveModel, liveConfig)
+		return connectErr
+	})
 	if err != nil {
 		slog.Error("live_connect_failed", "error", err)
 		conn.WriteJSON(map[string]string{"type": "tool_error", "message": "Failed to connect to Live API"})
@@ -89,11 +96,15 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config)
 		"state", string(mgr.State()),
 	)
 
-	// Block until proxy closes (browser disconnect, error, or server shutdown)
-	<-ctx.Done()
+	// Block until proxy goroutines exit (browser disconnect, error, or server shutdown)
+	proxy.Wait()
 
+	cancel()
 	proxy.Close()
-	mgr.Shutdown(ctx)
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	mgr.Shutdown(shutdownCtx)
 	slog.Info("session_ended", "remote", r.RemoteAddr)
 }
 

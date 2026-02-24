@@ -87,9 +87,10 @@ func (p *Proxy) Run(ctx context.Context) {
 // SwapSession replaces the live session (used for onboarding→reunion transition).
 func (p *Proxy) SwapSession(newSession *genai.Session) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	old := p.liveSession
 	p.liveSession = newSession
+	p.mu.Unlock()
+
 	if old != nil {
 		old.Close()
 	}
@@ -253,7 +254,7 @@ func (p *Proxy) handleToolCall(ctx context.Context, tc *genai.LiveServerToolCall
 		session := p.getSession()
 		if session == nil {
 			slog.Warn("session_nil_during_tool_response")
-			return
+			continue
 		}
 
 		err = session.SendToolResponse(genai.LiveSendToolResponseParameters{
@@ -318,17 +319,8 @@ func (p *Proxy) sendBinary(data []byte) {
 	}
 }
 
-// Close terminates the proxy and waits for goroutines.
-func (p *Proxy) Close() {
-	close(p.done)
-
-	p.mu.Lock()
-	if p.liveSession != nil {
-		p.liveSession.Close()
-		p.liveSession = nil
-	}
-	p.mu.Unlock()
-
+// Wait blocks until all proxy goroutines have exited or the shutdown timeout elapses.
+func (p *Proxy) Wait() {
 	done := make(chan struct{})
 	go func() {
 		p.wg.Wait()
@@ -341,4 +333,20 @@ func (p *Proxy) Close() {
 	case <-time.After(shutdownTimeout):
 		slog.Warn("proxy_shutdown_timeout")
 	}
+}
+
+// Close terminates the proxy, closes the live session, and waits for goroutines.
+func (p *Proxy) Close() {
+	close(p.done)
+
+	p.mu.Lock()
+	old := p.liveSession
+	p.liveSession = nil
+	p.mu.Unlock()
+
+	if old != nil {
+		old.Close()
+	}
+
+	p.Wait()
 }

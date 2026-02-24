@@ -32,15 +32,19 @@ func (p *Proxy) Reconnect(ctx context.Context, client *genai.Client, model strin
 	token := p.toolHandler.resumptionToken
 	p.toolHandler.mu.RUnlock()
 
+	// Shallow copy config to avoid mutating the caller's original.
+	cfg := *config
 	if token != "" {
-		if config.SessionResumption == nil {
-			config.SessionResumption = &genai.SessionResumptionConfig{}
+		resumption := &genai.SessionResumptionConfig{Transparent: true}
+		if config.SessionResumption != nil {
+			*resumption = *config.SessionResumption
 		}
-		config.SessionResumption.Handle = token
+		resumption.Handle = token
+		cfg.SessionResumption = resumption
 	}
 
 	return retry.WithBackoff(ctx, 3, func() error {
-		newSession, err := client.Live.Connect(ctx, model, config)
+		newSession, err := client.Live.Connect(ctx, model, &cfg)
 		if err != nil {
 			slog.Error("reconnect_failed", "error", err)
 			return err
