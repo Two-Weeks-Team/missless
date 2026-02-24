@@ -12,21 +12,18 @@ import (
 func (p *Proxy) HandleGoAway(ctx context.Context) error {
 	slog.Info("goaway_received", "action", "reconnecting")
 
-	return retry.WithBackoff(ctx, 3, func() error {
-		p.toolHandler.mu.RLock()
-		token := p.toolHandler.resumptionToken
-		p.toolHandler.mu.RUnlock()
+	p.mu.Lock()
+	client := p.client
+	model := p.model
+	config := p.liveConfig
+	p.mu.Unlock()
 
-		if token == "" {
-			slog.Warn("no_resumption_token", "action", "skip_reconnect")
-			return nil
-		}
-
-		// Get the current client from the existing session's context
-		// The caller must provide the genai client and model for reconnection
-		slog.Info("attempting_reconnect", "hasToken", token != "")
+	if client == nil || config == nil {
+		slog.Warn("reconnect_params_missing", "action", "skip_reconnect")
 		return nil
-	})
+	}
+
+	return p.Reconnect(ctx, client, model, config)
 }
 
 // Reconnect creates a new Live API session with session resumption and swaps it in.

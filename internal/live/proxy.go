@@ -2,7 +2,6 @@ package live
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"sync"
@@ -13,12 +12,32 @@ import (
 	"google.golang.org/genai"
 )
 
+const (
+	// browserSendBufSize is the channel buffer size for outbound browser messages.
+	browserSendBufSize = 64
+
+	// browserReadTimeout is the read deadline for browser WebSocket messages.
+	browserReadTimeout = 60 * time.Second
+
+	// browserWriteTimeout is the write deadline for browser WebSocket messages.
+	browserWriteTimeout = 10 * time.Second
+
+	// sessionPollInterval is the polling interval when waiting for a live session.
+	sessionPollInterval = 100 * time.Millisecond
+
+	// shutdownTimeout is the max wait time for goroutines to exit during Close.
+	shutdownTimeout = 5 * time.Second
+)
+
 // Proxy manages the bidirectional WebSocket proxy between browser and Gemini Live API.
 // Lock ordering: Proxy.mu is Level 2.
 type Proxy struct {
 	browserConn   *websocket.Conn
 	liveSession   *genai.Session
 	toolHandler   *ToolHandler
+	client        *genai.Client
+	model         string
+	liveConfig    *genai.LiveConnectConfig
 	mu            sync.Mutex
 	wg            sync.WaitGroup
 	done          chan struct{}
@@ -32,8 +51,17 @@ func NewProxy(browserConn *websocket.Conn, liveSession *genai.Session, toolHandl
 		liveSession:   liveSession,
 		toolHandler:   toolHandler,
 		done:          make(chan struct{}),
-		sendToBrowser: make(chan []byte, 64),
+		sendToBrowser: make(chan []byte, browserSendBufSize),
 	}
+}
+
+// SetReconnectParams stores the client, model, and config needed for GoAway reconnection.
+func (p *Proxy) SetReconnectParams(client *genai.Client, model string, config *genai.LiveConnectConfig) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.client = client
+	p.model = model
+	p.liveConfig = config
 }
 
 // Run starts the bidirectional proxy forwarding goroutines.
@@ -86,7 +114,7 @@ func (p *Proxy) forwardBrowserToLive(ctx context.Context) {
 		default:
 		}
 
-		p.browserConn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		p.browserConn.SetReadDeadline(time.Now().Add(browserReadTimeout))
 		msgType, data, err := p.browserConn.ReadMessage()
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
@@ -104,12 +132,11 @@ func (p *Proxy) forwardBrowserToLive(ctx context.Context) {
 		}
 
 		if msgType == websocket.BinaryMessage {
-			// Binary = PCM audio from browser
-			encoded := base64.StdEncoding.EncodeToString(data)
+			// Binary = PCM audio from browser; SDK handles base64 encoding internally.
 			err = session.SendRealtimeInput(genai.LiveSendRealtimeInputParameters{
 				Audio: &genai.Blob{
 					MIMEType: "audio/pcm;rate=16000",
-					Data:     []byte(encoded),
+					Data:     data,
 				},
 			})
 			if err != nil {
@@ -140,7 +167,7 @@ func (p *Proxy) forwardLiveToBrowser(ctx context.Context) {
 
 		session := p.getSession()
 		if session == nil {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(sessionPollInterval)
 			continue
 		}
 
@@ -253,7 +280,7 @@ func (p *Proxy) browserWriter(ctx context.Context) {
 		case <-p.done:
 			return
 		case data := <-p.sendToBrowser:
-			p.browserConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			p.browserConn.SetWriteDeadline(time.Now().Add(browserWriteTimeout))
 			var msgType int
 			if json.Valid(data) {
 				msgType = websocket.TextMessage
@@ -311,7 +338,7 @@ func (p *Proxy) Close() {
 	select {
 	case <-done:
 		slog.Info("proxy_goroutines_exited")
-	case <-time.After(5 * time.Second):
+	case <-time.After(shutdownTimeout):
 		slog.Warn("proxy_shutdown_timeout")
 	}
 }

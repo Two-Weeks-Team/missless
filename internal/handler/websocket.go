@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/live"
@@ -12,11 +13,20 @@ import (
 	"google.golang.org/genai"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		// Allow all origins during development; restrict in production
-		return true
-	},
+// LiveModel is the Gemini model used for the Live API connection.
+const LiveModel = "gemini-2.5-flash-native-audio"
+
+// newUpgrader creates a WebSocket upgrader with origin checking based on environment.
+func newUpgrader(cfg *config.Config) websocket.Upgrader {
+	return websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			if !cfg.IsProd() {
+				return true
+			}
+			origin := r.Header.Get("Origin")
+			return origin == "" || strings.HasSuffix(origin, cfg.Domain)
+		},
+	}
 }
 
 // RegisterWebSocket registers the WebSocket endpoint for browser ↔ Go proxy.
@@ -27,7 +37,8 @@ func RegisterWebSocket(mux *http.ServeMux, cfg *config.Config) {
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	up := newUpgrader(cfg)
+	conn, err := up.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("websocket_upgrade_failed", "error", err)
 		return
@@ -61,7 +72,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config)
 
 	// Connect to Live API with onboarding config
 	liveConfig := buildOnboardingConfig()
-	liveSession, err := client.Live.Connect(ctx, "gemini-2.5-flash-native-audio", liveConfig)
+	liveSession, err := client.Live.Connect(ctx, LiveModel, liveConfig)
 	if err != nil {
 		slog.Error("live_connect_failed", "error", err)
 		conn.WriteJSON(map[string]string{"type": "tool_error", "message": "Failed to connect to Live API"})
@@ -70,6 +81,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config)
 
 	// Create and run proxy
 	proxy := live.NewProxy(conn, liveSession, toolHandler)
+	proxy.SetReconnectParams(client, LiveModel, liveConfig)
 	proxy.Run(ctx)
 
 	slog.Info("session_started",
