@@ -5,6 +5,9 @@ import { useWebSocket, ServerMessage } from '../hooks/useWebSocket';
 import { useAudio } from '../hooks/useAudio';
 import SceneDisplay from '../components/SceneDisplay';
 import SessionTransition from '../components/SessionTransition';
+import OnboardingFlow, { type OnboardingStage } from '../components/OnboardingFlow';
+import type { YouTubeVideo } from '../components/YouTubeGrid';
+import type { Highlight } from '../components/HighlightCard';
 
 type TransitionPhase = 'idle' | 'transitioning' | 'ready';
 
@@ -23,6 +26,14 @@ export default function Home() {
   const [transcript, setTranscript] = useState<string>('');
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Onboarding state
+  const [onboardingStage, setOnboardingStage] = useState<OnboardingStage>('welcome');
+  const [videos, setVideos] = useState<YouTubeVideo[]>([]);
+  const [personCrops, setPersonCrops] = useState<string[]>([]);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [analysisStep, setAnalysisStep] = useState('');
+  const [analysisPercent, setAnalysisPercent] = useState(0);
+
   const { initAudioContext, playPCM, cleanup: cleanupAudio } = useAudio();
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -38,12 +49,39 @@ export default function Home() {
         break;
       case 'session_transition':
         setTransition('transitioning');
+        setOnboardingStage('transition');
         break;
       case 'session_ready':
         setTransition('ready');
+        setOnboardingStage('reunion');
         break;
       case 'transcript':
         setTranscript(msg.text);
+        break;
+      case 'youtube_videos':
+        setVideos(msg.videos as YouTubeVideo[]);
+        setOnboardingStage('youtube_grid');
+        break;
+      case 'person_detected':
+        setPersonCrops(msg.crops);
+        setOnboardingStage('person_select');
+        break;
+      case 'analysis_progress':
+        setOnboardingStage('analyzing');
+        setAnalysisStep(msg.step);
+        setAnalysisPercent(msg.percent);
+        if (msg.highlight) {
+          try {
+            const h = JSON.parse(msg.highlight) as Highlight;
+            setHighlights((prev) => [...prev, h]);
+          } catch {
+            // Highlight may be a plain string description
+            setHighlights((prev) => [
+              ...prev,
+              { timestamp: '', description: msg.highlight as string, expression: '' },
+            ]);
+          }
+        }
         break;
     }
   }, [playPCM]);
@@ -65,7 +103,7 @@ export default function Home() {
     ? `ws://${window.location.hostname}:${window.location.port || '18080'}/ws`
     : '';
 
-  const { state, connect, disconnect } = useWebSocket(wsUrl, handleMessage);
+  const { state, connect, send, disconnect } = useWebSocket(wsUrl, handleMessage);
 
   const handleStart = () => {
     initAudioContext();
@@ -81,7 +119,23 @@ export default function Home() {
     setFinalSrc(null);
     setTransition('idle');
     setTranscript('');
+    setOnboardingStage('welcome');
+    setVideos([]);
+    setPersonCrops([]);
+    setHighlights([]);
+    setAnalysisStep('');
+    setAnalysisPercent(0);
   };
+
+  const handleSelectVideo = useCallback((videoId: string) => {
+    send({ type: 'select_video', videoId });
+    setOnboardingStage('analyzing');
+  }, [send]);
+
+  const handleSelectPerson = useCallback((personIndex: number) => {
+    send({ type: 'select_person', personIndex });
+    setOnboardingStage('analyzing');
+  }, [send]);
 
   if (!started) {
     return (
@@ -123,6 +177,16 @@ export default function Home() {
     <main style={{ position: 'relative', height: '100dvh', width: '100dvw' }}>
       <SceneDisplay previewSrc={previewSrc} finalSrc={finalSrc} />
       <SessionTransition phase={transition} />
+      <OnboardingFlow
+        stage={onboardingStage}
+        videos={videos}
+        personCrops={personCrops}
+        highlights={highlights}
+        analysisStep={analysisStep}
+        analysisPercent={analysisPercent}
+        onSelectVideo={handleSelectVideo}
+        onSelectPerson={handleSelectPerson}
+      />
 
       {/* Connection indicator */}
       <div
