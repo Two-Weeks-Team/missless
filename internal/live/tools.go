@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Two-Weeks-Team/missless/internal/memory"
 	"github.com/Two-Weeks-Team/missless/internal/scene"
 )
 
@@ -19,6 +20,10 @@ type ToolHandler struct {
 	sendEvent func(v any)
 	// generator handles image generation (nil until SetGenerator is called).
 	generator *scene.Generator
+	// memoryStore handles memory search for recall_memory tool.
+	memoryStore *memory.Store
+	// personaID is the current persona identifier for memory lookups.
+	personaID string
 }
 
 // NewToolHandler creates a new tool handler.
@@ -31,6 +36,14 @@ func (h *ToolHandler) SetGenerator(gen *scene.Generator) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.generator = gen
+}
+
+// SetMemoryStore sets the memory store for recall_memory.
+func (h *ToolHandler) SetMemoryStore(store *memory.Store, personaID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.memoryStore = store
+	h.personaID = personaID
 }
 
 // getGenerator returns the current generator under lock.
@@ -166,8 +179,32 @@ func (h *ToolHandler) handleRecallMemory(ctx context.Context, args map[string]an
 		return errResp, nil
 	}
 
-	// TODO: T16 - Firestore memory search
-	return map[string]any{"memories": []string{}, "query": query}, nil
+	h.mu.RLock()
+	store := h.memoryStore
+	pid := h.personaID
+	h.mu.RUnlock()
+
+	if store == nil || pid == "" {
+		return map[string]any{"memories": []any{}, "query": query}, nil
+	}
+
+	memories, err := store.Search(ctx, pid, query)
+	if err != nil {
+		slog.Warn("memory_search_failed", "error", err)
+		return map[string]any{"memories": []any{}, "query": query}, nil
+	}
+
+	// Format memories for AI consumption.
+	results := make([]map[string]string, 0, len(memories))
+	for _, m := range memories {
+		results = append(results, map[string]string{
+			"timestamp":   m.Timestamp,
+			"description": m.Description,
+			"expression":  m.Expression,
+		})
+	}
+
+	return map[string]any{"memories": results, "query": query, "count": len(results)}, nil
 }
 
 func (h *ToolHandler) handleAnalyzeUser(ctx context.Context, args map[string]any) (map[string]any, error) {
