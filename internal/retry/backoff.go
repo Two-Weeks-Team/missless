@@ -43,7 +43,7 @@ func WithBackoff(ctx context.Context, maxRetries int, fn func() error) error {
 
 func calculateDelay(attempt int) time.Duration {
 	base := math.Pow(2, float64(attempt)) * float64(time.Second)
-	jitter := rand.Float64() * float64(time.Second)
+	jitter := rand.Float64() * base * 0.5 // 0~50% of base delay
 	delay := time.Duration(base) + time.Duration(jitter)
 
 	maxDelay := 30 * time.Second

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Two-Weeks-Team/missless/internal/util"
 	"github.com/gorilla/websocket"
 )
 
@@ -34,14 +35,14 @@ func (p *Proxy) Run(ctx context.Context) {
 	defer p.mu.Unlock()
 
 	p.wg.Add(2)
-	go func() {
+	util.SafeGo(func() {
 		defer p.wg.Done()
 		p.forwardBrowserToLive(ctx)
-	}()
-	go func() {
+	})
+	util.SafeGo(func() {
 		defer p.wg.Done()
 		p.forwardLiveToBrowser(ctx)
-	}()
+	})
 }
 
 // forwardBrowserToLive reads from browser WebSocket and sends to Live API.

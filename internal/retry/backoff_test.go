@@ -93,3 +93,28 @@ func TestCalculateDelay_Bounds(t *testing.T) {
 		}
 	}
 }
+
+func TestCalculateDelay_JitterRange(t *testing.T) {
+	// For attempt 0: base = 1s, jitter = 0~0.5s → total = 1s~1.5s
+	// For attempt 1: base = 2s, jitter = 0~1s   → total = 2s~3s
+	// For attempt 2: base = 4s, jitter = 0~2s   → total = 4s~6s
+	cases := []struct {
+		attempt int
+		minD    time.Duration
+		maxD    time.Duration
+	}{
+		{0, 1 * time.Second, 1500 * time.Millisecond},
+		{1, 2 * time.Second, 3 * time.Second},
+		{2, 4 * time.Second, 6 * time.Second},
+	}
+
+	for _, tc := range cases {
+		for range 100 {
+			d := calculateDelay(tc.attempt)
+			if d < tc.minD || d > tc.maxD {
+				t.Fatalf("attempt %d: delay %v out of range [%v, %v]",
+					tc.attempt, d, tc.minD, tc.maxD)
+			}
+		}
+	}
+}
