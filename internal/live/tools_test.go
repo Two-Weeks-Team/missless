@@ -152,11 +152,12 @@ func TestToolHandler_EventSender(t *testing.T) {
 	}
 }
 
-func TestToolHandler_AsyncSceneEvents(t *testing.T) {
+func TestToolHandler_SceneFallbackEvent(t *testing.T) {
 	h := NewToolHandler()
+	// No generator set — should emit a fallback event.
 
 	var wg sync.WaitGroup
-	wg.Add(2) // Expect 2 events: scene_preview + scene_final
+	wg.Add(1)
 
 	var mu sync.Mutex
 	var events []map[string]any
@@ -178,7 +179,6 @@ func TestToolHandler_AsyncSceneEvents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Wait for async goroutine with timeout
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -188,15 +188,15 @@ func TestToolHandler_AsyncSceneEvents(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for async events")
+		t.Fatal("timed out waiting for fallback event")
 	}
 
 	mu.Lock()
 	count := len(events)
 	mu.Unlock()
 
-	if count < 2 {
-		t.Fatalf("expected at least 2 async events (preview + final), got %d", count)
+	if count != 1 {
+		t.Fatalf("expected 1 fallback event, got %d", count)
 	}
 }
 

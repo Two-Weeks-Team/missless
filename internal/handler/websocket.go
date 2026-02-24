@@ -10,6 +10,7 @@ import (
 	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/live"
 	"github.com/Two-Weeks-Team/missless/internal/retry"
+	"github.com/Two-Weeks-Team/missless/internal/scene"
 	"github.com/Two-Weeks-Team/missless/internal/session"
 	"github.com/gorilla/websocket"
 	"google.golang.org/genai"
@@ -69,8 +70,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config)
 	// Create session manager
 	mgr := session.NewManager(r.RemoteAddr)
 
-	// Create tool handler
+	// Create image generator and tool handler
+	sceneGen := scene.NewGenerator(client)
 	toolHandler := live.NewToolHandler()
+	toolHandler.SetGenerator(sceneGen)
 
 	// Connect to Live API with onboarding config and retry
 	liveConfig := buildOnboardingConfig()
