@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Two-Weeks-Team/missless/internal/util"
+	"github.com/Two-Weeks-Team/missless/internal/scene"
 )
 
 // ToolHandler executes server-side tools called by the Live API.
@@ -17,11 +17,27 @@ type ToolHandler struct {
 	resumptionToken string
 	// sendEvent sends a JSON event to the browser (set by Proxy).
 	sendEvent func(v any)
+	// generator handles image generation (nil until SetGenerator is called).
+	generator *scene.Generator
 }
 
 // NewToolHandler creates a new tool handler.
 func NewToolHandler() *ToolHandler {
 	return &ToolHandler{}
+}
+
+// SetGenerator sets the image generator for scene tools.
+func (h *ToolHandler) SetGenerator(gen *scene.Generator) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.generator = gen
+}
+
+// getGenerator returns the current generator under lock.
+func (h *ToolHandler) getGenerator() *scene.Generator {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.generator
 }
 
 // SetEventSender sets the callback for sending events to the browser.
@@ -83,28 +99,21 @@ func (h *ToolHandler) handleGenerateScene(ctx context.Context, args map[string]a
 	if errResp != nil {
 		return errResp, nil
 	}
+	characters, _ := args["characters"].(string)
 
-	// Launch async 2-stage progressive rendering via SafeGo.
-	// Stage 1 (preview) runs immediately; Stage 2 (final) follows.
-	util.SafeGo(func() {
-		// Stage 1: fast preview → browser
-		h.emitEvent(map[string]any{
-			"type":   "scene_preview",
-			"prompt": prompt,
-			"mood":   mood,
-			"status": "generating",
+	gen := h.getGenerator()
+	if gen != nil {
+		// Use the real 2-stage progressive generator.
+		gen.GenerateProgressive(ctx, prompt, mood, characters, func(eventType, data string) {
+			h.emitEvent(map[string]any{
+				"type":  eventType,
+				"image": data,
+			})
 		})
-
-		// TODO: T05 - gemini-2.5-flash-image (1-3s preview)
-		// TODO: T05 - imagen-4.0-generate-001 (8-12s final)
-
-		h.emitEvent(map[string]any{
-			"type":   "scene_final",
-			"prompt": prompt,
-			"mood":   mood,
-			"status": "complete",
-		})
-	})
+	} else {
+		// Fallback: notify browser without actual image data.
+		h.emitEvent(map[string]any{"type": "scene_preview", "status": "generating"})
+	}
 
 	return map[string]any{"status": "scene generation started", "prompt": prompt, "mood": mood}, nil
 }
@@ -119,24 +128,18 @@ func (h *ToolHandler) handleGenerateFastScene(ctx context.Context, args map[stri
 		return errResp, nil
 	}
 
-	// Fast scene uses only the preview model (no final high-res pass).
-	util.SafeGo(func() {
-		h.emitEvent(map[string]any{
-			"type":   "scene_preview",
-			"prompt": prompt,
-			"mood":   mood,
-			"status": "generating",
+	gen := h.getGenerator()
+	if gen != nil {
+		// Preview-only mode: fast image without the high-quality pass.
+		gen.GeneratePreviewOnly(ctx, prompt, mood, "", func(eventType, data string) {
+			h.emitEvent(map[string]any{
+				"type":  eventType,
+				"image": data,
+			})
 		})
-
-		// TODO: T05 - gemini-2.5-flash-image only (1-3s)
-
-		h.emitEvent(map[string]any{
-			"type":   "scene_preview",
-			"prompt": prompt,
-			"mood":   mood,
-			"status": "complete",
-		})
-	})
+	} else {
+		h.emitEvent(map[string]any{"type": "scene_preview", "status": "generating"})
+	}
 
 	return map[string]any{"status": "fast scene started", "prompt": prompt, "mood": mood}, nil
 }
