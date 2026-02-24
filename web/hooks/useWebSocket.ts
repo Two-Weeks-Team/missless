@@ -4,7 +4,7 @@ export type ServerMessage =
   | { type: 'audio'; data: ArrayBuffer }
   | { type: 'scene_preview'; image: string }
   | { type: 'scene_final'; image: string }
-  | { type: 'bgm_change'; mood: string; audioUrl: string }
+  | { type: 'atmosphere_change'; mood: string; bgm_url: string }
   | { type: 'tool_error'; tool: string; message: string }
   | { type: 'session_transition' }
   | { type: 'session_ready' }

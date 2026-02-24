@@ -213,3 +213,91 @@ func TestToolHandler_ResumptionToken(t *testing.T) {
 		t.Fatalf("expected token 'test-token-123', got %q", token)
 	}
 }
+
+func TestGetPresetBGMURL_AllMoods(t *testing.T) {
+	moods := []string{"warm", "romantic", "nostalgic", "playful", "emotional", "farewell"}
+	for _, mood := range moods {
+		bgm := GetPresetBGMURL(mood)
+		if bgm.Mood != mood {
+			t.Fatalf("expected mood %q, got %q", mood, bgm.Mood)
+		}
+		if bgm.URL == "" {
+			t.Fatalf("expected non-empty URL for mood %q", mood)
+		}
+	}
+}
+
+func TestGetPresetBGMURL_UnknownMood(t *testing.T) {
+	bgm := GetPresetBGMURL("unknown_mood")
+	if bgm.Mood != "nostalgic" {
+		t.Fatalf("expected fallback to 'nostalgic', got %q", bgm.Mood)
+	}
+	if bgm.URL == "" {
+		t.Fatal("expected non-empty fallback URL")
+	}
+}
+
+func TestHandleChangeAtmosphere_WriteJSON(t *testing.T) {
+	h := NewToolHandler()
+
+	var mu sync.Mutex
+	var events []map[string]any
+
+	h.SetEventSender(func(v any) {
+		mu.Lock()
+		defer mu.Unlock()
+		if m, ok := v.(map[string]any); ok {
+			events = append(events, m)
+		}
+	})
+
+	result, err := h.Handle(context.Background(), "change_atmosphere", map[string]any{"mood": "warm"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check result contains bgm_url.
+	if result["bgm_url"] == nil || result["bgm_url"] == "" {
+		t.Fatal("expected bgm_url in result")
+	}
+
+	// Check event contains bgm_url and mood.
+	mu.Lock()
+	defer mu.Unlock()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	ev := events[0]
+	if ev["type"] != "atmosphere_change" {
+		t.Fatalf("expected type 'atmosphere_change', got %q", ev["type"])
+	}
+	if ev["bgm_url"] == nil || ev["bgm_url"] == "" {
+		t.Fatal("expected bgm_url in event")
+	}
+	if ev["mood"] != "warm" {
+		t.Fatalf("expected mood 'warm', got %q", ev["mood"])
+	}
+}
+
+func TestAllPresetMoods(t *testing.T) {
+	moods := AllPresetMoods()
+	if len(moods) != 6 {
+		t.Fatalf("expected 6 preset moods, got %d", len(moods))
+	}
+
+	expected := map[string]bool{
+		"warm": false, "romantic": false, "nostalgic": false,
+		"playful": false, "emotional": false, "farewell": false,
+	}
+	for _, m := range moods {
+		if _, ok := expected[m]; !ok {
+			t.Fatalf("unexpected mood %q", m)
+		}
+		expected[m] = true
+	}
+	for m, found := range expected {
+		if !found {
+			t.Fatalf("missing mood %q", m)
+		}
+	}
+}
