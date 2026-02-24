@@ -1,7 +1,7 @@
 # missless — Virtual Reunion
 
 [![CI](https://github.com/Two-Weeks-Team/missless/actions/workflows/ci.yml/badge.svg)](https://github.com/Two-Weeks-Team/missless/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![Gemini](https://img.shields.io/badge/Gemini_Live_API-Powered-4285F4?logo=google&logoColor=white)](https://ai.google.dev/gemini-api/docs/live)
 [![Cloud Run](https://img.shields.io/badge/Cloud_Run-Deployed-4285F4?logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
@@ -35,7 +35,7 @@ Browser (Next.js 15 PWA)
     ▼
 Go Backend (Cloud Run)
     ├── SessionManager (state machine)
-    │   └── Onboarding → Analyzing → Reunion → Album
+    │   └── Onboarding → Analyzing → Transitioning → Reunion → Album → Ended
     ├── Live API Proxy (bidirectional audio streaming)
     ├── Tool Executor (5 server-side tools)
     │   ├── generate_scene  → Progressive 2-stage image
@@ -61,7 +61,7 @@ Google Cloud Services
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| **Backend** | Go | 1.22+ |
+| **Backend** | Go | 1.25+ |
 | **Frontend** | Next.js (PWA, static export) | 15 |
 | **AI SDK** | google.golang.org/genai | v1.47.0 |
 | **Agent SDK** | google.golang.org/adk | v0.5.0 |
@@ -88,7 +88,7 @@ Google Cloud Services
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.25+
 - Node.js 20+
 - GCP project with APIs enabled (Gemini, YouTube Data, Firestore, Storage)
 - gcloud CLI authenticated
