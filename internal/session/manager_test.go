@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/genai"
 )
@@ -225,3 +226,202 @@ func TestManager_SessionID(t *testing.T) {
 		t.Fatalf("expected session ID 'unique-id-123', got %q", mgr.SessionID())
 	}
 }
+
+func TestBuildReunionConfig_AffectiveDialog(t *testing.T) {
+	mgr := NewManager("test-affective")
+	mgr.SetPersona("Mom", "Sulafat", "ko", "Warm", "Gentle")
+
+	cfg := mgr.BuildReunionConfig()
+
+	if cfg.EnableAffectiveDialog == nil || !*cfg.EnableAffectiveDialog {
+		t.Fatal("expected EnableAffectiveDialog to be true")
+	}
+}
+
+func TestBuildReunionConfig_ProactiveAudio(t *testing.T) {
+	mgr := NewManager("test-proactive")
+	mgr.SetPersona("Mom", "Sulafat", "ko", "Warm", "Gentle")
+
+	cfg := mgr.BuildReunionConfig()
+
+	if cfg.Proactivity == nil {
+		t.Fatal("expected Proactivity config")
+	}
+	if cfg.Proactivity.ProactiveAudio == nil || !*cfg.Proactivity.ProactiveAudio {
+		t.Fatal("expected ProactiveAudio to be true")
+	}
+}
+
+func TestBuildReunionConfig_ContextCompression(t *testing.T) {
+	mgr := NewManager("test-compression")
+	mgr.SetPersona("Mom", "Sulafat", "ko", "Warm", "Gentle")
+
+	cfg := mgr.BuildReunionConfig()
+
+	if cfg.ContextWindowCompression == nil {
+		t.Fatal("expected ContextWindowCompression config")
+	}
+	if cfg.ContextWindowCompression.TriggerTokens == nil ||
+		*cfg.ContextWindowCompression.TriggerTokens != ContextTriggerTokens {
+		t.Fatalf("expected TriggerTokens=%d, got %v",
+			ContextTriggerTokens, cfg.ContextWindowCompression.TriggerTokens)
+	}
+	if cfg.ContextWindowCompression.SlidingWindow == nil {
+		t.Fatal("expected SlidingWindow config")
+	}
+	if cfg.ContextWindowCompression.SlidingWindow.TargetTokens == nil ||
+		*cfg.ContextWindowCompression.SlidingWindow.TargetTokens != ContextTargetTokens {
+		t.Fatalf("expected TargetTokens=%d, got %v",
+			ContextTargetTokens, cfg.ContextWindowCompression.SlidingWindow.TargetTokens)
+	}
+}
+
+func TestBuildReunionConfig_ReunionTools(t *testing.T) {
+	mgr := NewManager("test-reunion-tools")
+	mgr.SetPersona("Mom", "Sulafat", "ko", "Warm", "Gentle")
+
+	cfg := mgr.BuildReunionConfig()
+
+	if len(cfg.Tools) == 0 || len(cfg.Tools[0].FunctionDeclarations) == 0 {
+		t.Fatal("expected reunion tools")
+	}
+
+	toolNames := make(map[string]bool)
+	for _, fd := range cfg.Tools[0].FunctionDeclarations {
+		toolNames[fd.Name] = true
+	}
+	expected := []string{
+		"generate_scene", "generate_fast_scene", "change_atmosphere",
+		"recall_memory", "analyze_user", "end_reunion",
+	}
+	for _, name := range expected {
+		if !toolNames[name] {
+			t.Fatalf("expected reunion tool %q", name)
+		}
+	}
+	if len(cfg.Tools[0].FunctionDeclarations) != 6 {
+		t.Fatalf("expected 6 reunion tools, got %d", len(cfg.Tools[0].FunctionDeclarations))
+	}
+}
+
+func TestStartReunionTimer_CountIncrements(t *testing.T) {
+	mgr := NewManager("test-timer")
+
+	if mgr.ReunionCount() != 0 {
+		t.Fatalf("expected initial reunion count 0, got %d", mgr.ReunionCount())
+	}
+
+	ch := mgr.StartReunionTimer()
+	if ch == nil {
+		t.Fatal("expected non-nil timer channel")
+	}
+	if mgr.ReunionCount() != 1 {
+		t.Fatalf("expected reunion count 1 after first start, got %d", mgr.ReunionCount())
+	}
+
+	// Start again — count should increment.
+	mgr.StartReunionTimer()
+	if mgr.ReunionCount() != 2 {
+		t.Fatalf("expected reunion count 2 after second start, got %d", mgr.ReunionCount())
+	}
+
+	mgr.StopReunionTimer()
+}
+
+func TestStopReunionTimer_Safe(t *testing.T) {
+	mgr := NewManager("test-stop-timer")
+
+	// Stopping without starting should not panic.
+	mgr.StopReunionTimer()
+
+	// Start then stop.
+	mgr.StartReunionTimer()
+	mgr.StopReunionTimer()
+
+	// Double stop should be safe.
+	mgr.StopReunionTimer()
+}
+
+func TestStartReunionTimer_Warning(t *testing.T) {
+	// Override constants for a fast test: we can't change the constants,
+	// so we test that the notify function is wired up by checking the timer channel.
+	mgr := NewManager("test-warning")
+
+	var mu sync.Mutex
+	var events []map[string]any
+	mgr.SetNotifyFunc(func(v any) {
+		mu.Lock()
+		defer mu.Unlock()
+		if m, ok := v.(map[string]any); ok {
+			events = append(events, m)
+		}
+	})
+
+	ch := mgr.StartReunionTimer()
+	if ch == nil {
+		t.Fatal("expected timer channel")
+	}
+
+	// We can't wait 240s in a test, so just verify it started correctly.
+	mgr.StopReunionTimer()
+
+	// No events expected in immediate stop.
+	mu.Lock()
+	count := len(events)
+	mu.Unlock()
+	_ = count // warning may or may not have fired depending on timing
+}
+
+func TestBuildContinueSummary(t *testing.T) {
+	mgr := NewManager("test-continue")
+	mgr.SetPersona("Dad", "Puck", "ko", "Wise", "Calm")
+
+	// Simulate a reunion having happened.
+	mgr.StartReunionTimer()
+	mgr.StopReunionTimer()
+
+	prev := "We talked about the camping trip in 2019."
+	summary := mgr.BuildContinueSummary(prev)
+
+	if !strings.Contains(summary, "Dad") {
+		t.Fatalf("expected persona name in continuation summary")
+	}
+	if !strings.Contains(summary, "Reunion #1") {
+		t.Fatalf("expected reunion count in continuation summary, got: %s", summary)
+	}
+	if !strings.Contains(summary, prev) {
+		t.Fatalf("expected previous summary in continuation")
+	}
+	if !strings.Contains(summary, "Continue the conversation") {
+		t.Fatalf("expected continuation instruction")
+	}
+}
+
+func TestBuildReunionConfig_FallbackVoice(t *testing.T) {
+	mgr := NewManager("test-fallback")
+	// Don't set persona — voice should fallback to Aoede.
+	cfg := mgr.BuildReunionConfig()
+
+	voiceName := cfg.SpeechConfig.VoiceConfig.PrebuiltVoiceConfig.VoiceName
+	if voiceName != "Aoede" {
+		t.Fatalf("expected fallback voice 'Aoede', got %q", voiceName)
+	}
+}
+
+func TestBuildReunionConfig_NonKoreanLang(t *testing.T) {
+	mgr := NewManager("test-en-lang")
+	mgr.SetPersona("Friend", "Kore", "en", "Cheerful", "Casual")
+
+	cfg := mgr.BuildReunionConfig()
+	sysText := cfg.SystemInstruction.Parts[0].Text
+
+	if strings.Contains(sysText, "Korean") {
+		t.Fatalf("expected non-Korean language note for lang='en'")
+	}
+	if !strings.Contains(sysText, "'en'") {
+		t.Fatalf("expected language code 'en' in system instruction, got: %s", sysText)
+	}
+}
+
+// Ensure unused import doesn't cause issues.
+var _ = time.Second

@@ -14,6 +14,17 @@ import (
 // NotifyFunc sends a JSON event to the browser.
 type NotifyFunc func(v any)
 
+const (
+	// ReunionDuration is the maximum reunion session time.
+	ReunionDuration = 300 * time.Second
+	// ReunionWarning fires at 240s to warn about ending.
+	ReunionWarning = 240 * time.Second
+	// ContextTriggerTokens is the token count that triggers compression.
+	ContextTriggerTokens int64 = 12000
+	// ContextTargetTokens is the target after compression.
+	ContextTargetTokens int64 = 8000
+)
+
 // Manager orchestrates the session lifecycle.
 // Lock ordering: Manager.mu is Level 1 (highest priority).
 type Manager struct {
@@ -28,6 +39,10 @@ type Manager struct {
 	speechStyle  string
 	createdAt    time.Time
 	notifyFn     NotifyFunc
+	reunionTimer *time.Timer
+	warningTimer *time.Timer
+	reunionCount int
+	lastSummary  string
 }
 
 // NewManager creates a new session manager.
@@ -196,6 +211,10 @@ func (m *Manager) BuildReunionConfig() *genai.LiveConnectConfig {
 	}
 
 	sysInstruction := buildReunionSystemInstruction(name, personality, speechStyle, lang)
+	enableAffective := true
+	enableProactive := true
+	triggerTokens := ContextTriggerTokens
+	targetTokens := ContextTargetTokens
 
 	return &genai.LiveConnectConfig{
 		ResponseModalities: []genai.Modality{genai.ModalityAudio, genai.ModalityText},
@@ -204,6 +223,16 @@ func (m *Manager) BuildReunionConfig() *genai.LiveConnectConfig {
 				PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{
 					VoiceName: voice,
 				},
+			},
+		},
+		EnableAffectiveDialog: &enableAffective,
+		Proactivity: &genai.ProactivityConfig{
+			ProactiveAudio: &enableProactive,
+		},
+		ContextWindowCompression: &genai.ContextWindowCompressionConfig{
+			TriggerTokens: &triggerTokens,
+			SlidingWindow: &genai.SlidingWindow{
+				TargetTokens: &targetTokens,
 			},
 		},
 		SystemInstruction: &genai.Content{
@@ -243,6 +272,83 @@ func (m *Manager) BuildOnboardingSummary() string {
 	sb.WriteString("The user has just completed onboarding and is about to experience a reunion.\n")
 	sb.WriteString("Begin the reunion naturally, as if meeting after a long time.\n")
 	return sb.String()
+}
+
+// StartReunionTimer starts the 300s reunion timer with a 240s warning.
+// Returns a channel that fires when the reunion should end.
+func (m *Manager) StartReunionTimer() <-chan time.Time {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Cancel any existing timers.
+	if m.warningTimer != nil {
+		m.warningTimer.Stop()
+	}
+	if m.reunionTimer != nil {
+		m.reunionTimer.Stop()
+	}
+
+	// 240s warning.
+	m.warningTimer = time.AfterFunc(ReunionWarning, func() {
+		remaining := ReunionDuration - ReunionWarning
+		slog.Info("reunion_warning", "session", m.sessionID, "remaining", remaining)
+		m.notify(map[string]any{
+			"type":      "reunion_warning",
+			"remaining": int(remaining.Seconds()),
+			"message":   "1분 후 대화가 종료됩니다",
+		})
+	})
+
+	// 300s auto-end.
+	m.reunionTimer = time.NewTimer(ReunionDuration)
+	m.reunionCount++
+	slog.Info("reunion_timer_started",
+		"session", m.sessionID,
+		"duration", ReunionDuration,
+		"reunionCount", m.reunionCount,
+	)
+
+	return m.reunionTimer.C
+}
+
+// StopReunionTimer stops the active reunion timer and warning.
+func (m *Manager) StopReunionTimer() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.warningTimer != nil {
+		m.warningTimer.Stop()
+		m.warningTimer = nil
+	}
+	if m.reunionTimer != nil {
+		m.reunionTimer.Stop()
+		m.reunionTimer = nil
+	}
+}
+
+// BuildContinueSummary creates a continuation summary that includes
+// the previous session's context for Client Content injection.
+func (m *Manager) BuildContinueSummary(previousSummary string) string {
+	m.mu.Lock()
+	m.lastSummary = previousSummary
+	name := m.personaName
+	count := m.reunionCount
+	m.mu.Unlock()
+
+	var sb strings.Builder
+	sb.WriteString("=== Continuation Context ===\n")
+	sb.WriteString(fmt.Sprintf("Reunion #%d with %s\n", count, name))
+	sb.WriteString("Previous conversation summary:\n")
+	sb.WriteString(previousSummary)
+	sb.WriteString("\nContinue the conversation naturally from where you left off.\n")
+	return sb.String()
+}
+
+// ReunionCount returns the number of reunion sessions started.
+func (m *Manager) ReunionCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.reunionCount
 }
 
 // notify sends an event to the browser if the notify function is set.
