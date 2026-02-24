@@ -14,11 +14,16 @@ export default function SceneDisplay({ previewSrc, finalSrc }: SceneDisplayProps
   const finalRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    if (finalSrc && finalRef.current) {
-      const img = finalRef.current;
-      img.onload = () => setShowFinal(true);
-      img.src = finalSrc;
-    }
+    const img = finalRef.current;
+    if (!finalSrc || !img) return;
+
+    const handleLoad = () => setShowFinal(true);
+    img.addEventListener('load', handleLoad);
+    img.src = finalSrc;
+
+    return () => {
+      img.removeEventListener('load', handleLoad);
+    };
   }, [finalSrc]);
 
   // Reset crossfade when new preview arrives

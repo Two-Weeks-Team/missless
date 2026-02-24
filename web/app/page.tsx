@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWebSocket, ServerMessage } from '../hooks/useWebSocket';
 import { useAudio } from '../hooks/useAudio';
 import SceneDisplay from '../components/SceneDisplay';
@@ -8,12 +8,20 @@ import SessionTransition from '../components/SessionTransition';
 
 type TransitionPhase = 'idle' | 'transitioning' | 'ready';
 
+const CONNECTION_COLORS: Record<string, string> = {
+  connected: '#4ade80',
+  connecting: '#fbbf24',
+  disconnected: '#ef4444',
+  error: '#ef4444',
+};
+
 export default function Home() {
   const [started, setStarted] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [finalSrc, setFinalSrc] = useState<string | null>(null);
   const [transition, setTransition] = useState<TransitionPhase>('idle');
   const [transcript, setTranscript] = useState<string>('');
+  const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { initAudioContext, playPCM, cleanup: cleanupAudio } = useAudio();
 
@@ -33,13 +41,25 @@ export default function Home() {
         break;
       case 'session_ready':
         setTransition('ready');
-        setTimeout(() => setTransition('idle'), 1600);
         break;
       case 'transcript':
         setTranscript(msg.text);
         break;
     }
   }, [playPCM]);
+
+  // Clean up transition timer on unmount or phase change
+  useEffect(() => {
+    if (transition === 'ready') {
+      readyTimerRef.current = setTimeout(() => setTransition('idle'), 1600);
+    }
+    return () => {
+      if (readyTimerRef.current) {
+        clearTimeout(readyTimerRef.current);
+        readyTimerRef.current = null;
+      }
+    };
+  }, [transition]);
 
   const wsUrl = typeof window !== 'undefined'
     ? `ws://${window.location.hostname}:${window.location.port || '18080'}/ws`
@@ -121,7 +141,7 @@ export default function Home() {
             width: 8,
             height: 8,
             borderRadius: '50%',
-            background: state === 'connected' ? '#4ade80' : state === 'connecting' ? '#fbbf24' : '#ef4444',
+            background: CONNECTION_COLORS[state] ?? '#ef4444',
           }}
         />
         <span style={{ fontSize: '0.75rem', color: 'var(--color-muted)' }}>

@@ -17,8 +17,6 @@ export default function SessionTransition({ phase }: SessionTransitionProps) {
     } else if (phase === 'ready') {
       const timer = setTimeout(() => setOpacity(0), 800);
       return () => clearTimeout(timer);
-    } else {
-      setOpacity(0);
     }
   }, [phase]);
 
@@ -64,11 +62,6 @@ export default function SessionTransition({ phase }: SessionTransitionProps) {
           </p>
         )}
       </div>
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }
