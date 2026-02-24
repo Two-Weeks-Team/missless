@@ -1,0 +1,58 @@
+# Environment & Secrets
+.env
+.env.local
+.env.production
+service-account.json
+*.key
+*.pem
+credentials.json
+
+# Go
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+node_modules/
+
+# Build artifacts
+dist/
+build/
+tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Terraform
+deploy/terraform/.terraform/
+deploy/terraform/.terraform.lock.hcl
+deploy/terraform/terraform.tfstate
+deploy/terraform/terraform.tfstate.backup
+*.tfvars
+
+# Debug
+__debug_bin*
+debug.test
+
+# Claude workspace
+.claude/

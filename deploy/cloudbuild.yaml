@@ -1,0 +1,59 @@
+# ============================================================
+# missless.co — Google Cloud Build Pipeline
+# Builds Docker image and deploys to Cloud Run
+# ============================================================
+
+steps:
+  # Step 1: Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/missless:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/missless:latest'
+      - '-f'
+      - 'deploy/Dockerfile'
+      - '.'
+
+  # Step 2: Push to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/missless:$COMMIT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/missless:latest'
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'missless'
+      - '--image=gcr.io/$PROJECT_ID/missless:$COMMIT_SHA'
+      - '--region=asia-northeast3'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--min-instances=1'
+      - '--max-instances=10'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--timeout=300'
+      - '--concurrency=80'
+      - '--service-account=missless-backend@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=production,DOMAIN=missless.co'
+      - '--set-secrets=GEMINI_API_KEY=gemini-api-key:latest,SESSION_SECRET=session-secret:latest,YOUTUBE_CLIENT_ID=youtube-client-id:latest,YOUTUBE_CLIENT_SECRET=youtube-client-secret:latest'
+
+images:
+  - 'gcr.io/$PROJECT_ID/missless:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/missless:latest'
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '600s'
