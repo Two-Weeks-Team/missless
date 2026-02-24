@@ -109,8 +109,10 @@ resource "google_cloud_run_v2_service" "missless" {
       max_instance_count = 10
     }
 
+    session_affinity = true
+
     containers {
-      image = "gcr.io/${var.project_id}/missless:latest"
+      image = "asia-northeast3-docker.pkg.dev/${var.project_id}/missless/server:latest"
 
       ports {
         container_port = 8080
@@ -141,7 +143,7 @@ resource "google_cloud_run_v2_service" "missless" {
       }
     }
 
-    timeout = "300s"
+    timeout = "3600s"
   }
 }
 
