@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 )
@@ -14,53 +15,174 @@ type Memory struct {
 	Topic       string    `json:"topic" firestore:"topic"`
 	Description string    `json:"description" firestore:"description"`
 	Timestamp   string    `json:"timestamp" firestore:"timestamp"`
+	Expression  string    `json:"expression" firestore:"expression"`
 	Source      string    `json:"source" firestore:"source"` // "video_analysis" | "user_input"
 	CreatedAt   time.Time `json:"createdAt" firestore:"createdAt"`
 }
 
-// Store manages persona memories in Firestore.
-// Lock ordering: MemoryStore.mu is Level 6 (lowest).
+// AnalysisHighlight is the input format from video analysis.
+type AnalysisHighlight struct {
+	Timestamp   string `json:"timestamp"`
+	Description string `json:"description"`
+	Expression  string `json:"expression"`
+}
+
+// Store manages persona memories (in-memory for hackathon; Firestore-ready interface).
+// Lock ordering: Store.mu is Level 6 (lowest).
 type Store struct {
 	mu        sync.RWMutex
-	cache     map[string][]Memory // LRU cache with size limit
-	maxCache  int
-	projectID string
-	// TODO: T16 - Add firestore.Client field
+	memories  map[string][]Memory // personaID → memories
+	maxPerKey int
 }
 
 // NewStore creates a new memory store.
-func NewStore(projectID string, maxCache int) *Store {
+func NewStore(maxPerKey int) *Store {
 	return &Store{
-		cache:     make(map[string][]Memory),
-		maxCache:  maxCache,
-		projectID: projectID,
+		memories:  make(map[string][]Memory),
+		maxPerKey: maxPerKey,
 	}
 }
 
-// Search finds memories by topic keywords.
-func (s *Store) Search(ctx context.Context, personaID, topic string) ([]Memory, error) {
-	slog.Info("memory_search", "persona", personaID, "topic", topic)
-
-	// Check cache first
-	s.mu.RLock()
-	if cached, ok := s.cache[personaID+":"+topic]; ok {
-		s.mu.RUnlock()
-		return cached, nil
+// SaveFromAnalysis batch-saves highlights from video analysis as memories.
+func (s *Store) SaveFromAnalysis(ctx context.Context, personaID string, highlights []AnalysisHighlight) error {
+	if len(highlights) == 0 {
+		return nil
 	}
-	s.mu.RUnlock()
 
-	// TODO: T16 - Firestore query: personas/{personaId}/memories
-	// WHERE keywords array-contains-any [topic keywords]
-	// LIMIT 10, ORDER BY relevance DESC
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	return nil, fmt.Errorf("not yet implemented")
+	now := time.Now()
+	for i, h := range highlights {
+		mem := Memory{
+			ID:          fmt.Sprintf("%s-analysis-%d", personaID, i),
+			Topic:       extractTopics(h.Description),
+			Description: h.Description,
+			Timestamp:   h.Timestamp,
+			Expression:  h.Expression,
+			Source:      "video_analysis",
+			CreatedAt:   now,
+		}
+		s.memories[personaID] = append(s.memories[personaID], mem)
+	}
+
+	// Trim to max.
+	if len(s.memories[personaID]) > s.maxPerKey {
+		s.memories[personaID] = s.memories[personaID][len(s.memories[personaID])-s.maxPerKey:]
+	}
+
+	slog.Info("memory_batch_saved", "persona", personaID, "count", len(highlights))
+	return nil
 }
 
-// Save stores a new memory.
+// Save stores a single memory.
 func (s *Store) Save(ctx context.Context, personaID string, memory Memory) error {
-	slog.Info("memory_save", "persona", personaID, "topic", memory.Topic)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	// TODO: T16 - Write to personas/{personaId}/memories/{memoryId}
+	if memory.CreatedAt.IsZero() {
+		memory.CreatedAt = time.Now()
+	}
 
-	return fmt.Errorf("not yet implemented")
+	s.memories[personaID] = append(s.memories[personaID], memory)
+
+	if len(s.memories[personaID]) > s.maxPerKey {
+		s.memories[personaID] = s.memories[personaID][len(s.memories[personaID])-s.maxPerKey:]
+	}
+
+	slog.Info("memory_saved", "persona", personaID, "topic", memory.Topic)
+	return nil
+}
+
+// Search finds memories matching the query keywords.
+// Returns at most 10 results sorted by relevance (match count).
+func (s *Store) Search(ctx context.Context, personaID, query string) ([]Memory, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	mems, ok := s.memories[personaID]
+	if !ok || len(mems) == 0 {
+		return nil, nil
+	}
+
+	keywords := splitKeywords(query)
+	if len(keywords) == 0 {
+		return nil, nil
+	}
+
+	type scored struct {
+		mem   Memory
+		score int
+	}
+
+	var results []scored
+	for _, m := range mems {
+		score := matchScore(m, keywords)
+		if score > 0 {
+			results = append(results, scored{mem: m, score: score})
+		}
+	}
+
+	// Sort by score descending (simple insertion sort for small N).
+	for i := 1; i < len(results); i++ {
+		for j := i; j > 0 && results[j].score > results[j-1].score; j-- {
+			results[j], results[j-1] = results[j-1], results[j]
+		}
+	}
+
+	limit := 10
+	if len(results) < limit {
+		limit = len(results)
+	}
+
+	out := make([]Memory, limit)
+	for i := 0; i < limit; i++ {
+		out[i] = results[i].mem
+	}
+
+	slog.Info("memory_search", "persona", personaID, "query", query, "found", len(out))
+	return out, nil
+}
+
+// Count returns the number of memories for a persona.
+func (s *Store) Count(personaID string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.memories[personaID])
+}
+
+// matchScore returns how many keywords match in a memory's topic and description.
+func matchScore(m Memory, keywords []string) int {
+	score := 0
+	lower := strings.ToLower(m.Topic + " " + m.Description)
+	for _, kw := range keywords {
+		if ContainsKeyword(lower, kw) {
+			score++
+		}
+	}
+	return score
+}
+
+// ContainsKeyword checks if text contains the keyword (case-insensitive).
+func ContainsKeyword(text, keyword string) bool {
+	return strings.Contains(strings.ToLower(text), strings.ToLower(keyword))
+}
+
+// splitKeywords splits a query into individual keywords.
+func splitKeywords(query string) []string {
+	parts := strings.Fields(strings.ToLower(query))
+	var keywords []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if len(p) > 0 {
+			keywords = append(keywords, p)
+		}
+	}
+	return keywords
+}
+
+// extractTopics creates a topic string from a description by taking key words.
+func extractTopics(description string) string {
+	// Simple: use the description itself as the topic for keyword matching.
+	return strings.ToLower(description)
 }
