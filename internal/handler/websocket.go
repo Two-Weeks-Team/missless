@@ -76,7 +76,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config)
 	toolHandler.SetGenerator(sceneGen)
 
 	// Connect to Live API with onboarding config and retry
-	liveConfig := buildOnboardingConfig()
+	liveConfig := mgr.BuildOnboardingConfig()
 	var liveSession *genai.Session
 	err = retry.WithBackoff(ctx, 3, func() error {
 		var connectErr error
@@ -109,111 +109,4 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config)
 	defer shutdownCancel()
 	mgr.Shutdown(shutdownCtx)
 	slog.Info("session_ended", "remote", r.RemoteAddr)
-}
-
-// buildOnboardingConfig creates the Live API config for the onboarding phase.
-func buildOnboardingConfig() *genai.LiveConnectConfig {
-	return &genai.LiveConnectConfig{
-		ResponseModalities: []genai.Modality{genai.ModalityAudio, genai.ModalityText},
-		SpeechConfig: &genai.SpeechConfig{
-			VoiceConfig: &genai.VoiceConfig{
-				PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{
-					VoiceName: "Aoede",
-				},
-			},
-		},
-		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{
-				genai.NewPartFromText(`You are a warm, empathetic AI guide for missless - a virtual reunion experience.
-You help users reconnect with people they miss through AI-powered conversations.
-
-During onboarding:
-1. Greet the user warmly in Korean
-2. Ask who they'd like to reconnect with
-3. Ask for a YouTube video of that person to analyze their characteristics
-4. Guide the user through the setup process
-
-Be gentle, understanding, and supportive. This is an emotional experience.
-Speak naturally in Korean unless the user prefers another language.`),
-			},
-		},
-		Tools: []*genai.Tool{
-			{
-				FunctionDeclarations: []*genai.FunctionDeclaration{
-					{
-						Name:        "generate_scene",
-						Description: "Generate a high-quality background scene image with 2-stage progressive rendering",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"prompt":     {Type: genai.TypeString, Description: "Scene description prompt"},
-								"mood":       {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
-								"characters": {Type: genai.TypeString, Description: "Character descriptions for the scene"},
-							},
-							Required: []string{"prompt", "mood"},
-						},
-					},
-					{
-						Name:        "generate_fast_scene",
-						Description: "Generate a quick preview-only scene image for rapid visual feedback",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"prompt": {Type: genai.TypeString, Description: "Scene description prompt"},
-								"mood":   {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
-							},
-							Required: []string{"prompt", "mood"},
-						},
-					},
-					{
-						Name:        "change_atmosphere",
-						Description: "Change the background music to match the conversation mood",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"mood": {Type: genai.TypeString, Description: "Target mood for BGM (warm, nostalgic, joyful, bittersweet)"},
-							},
-							Required: []string{"mood"},
-						},
-					},
-					{
-						Name:        "recall_memory",
-						Description: "Search shared memories relevant to the current conversation topic",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"query": {Type: genai.TypeString, Description: "Search query for relevant memories"},
-							},
-							Required: []string{"query"},
-						},
-					},
-					{
-						Name:        "analyze_user",
-						Description: "Analyze the user's emotional state and engagement level",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"aspect": {Type: genai.TypeString, Description: "Aspect to analyze (emotion, engagement, comfort)"},
-							},
-							Required: []string{"aspect"},
-						},
-					},
-					{
-						Name:        "end_reunion",
-						Description: "End the reunion session and generate a memory album",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"reason": {Type: genai.TypeString, Description: "Reason for ending (user_request, natural_end, timeout)"},
-							},
-							Required: []string{"reason"},
-						},
-					},
-				},
-			},
-		},
-		SessionResumption: &genai.SessionResumptionConfig{
-			Transparent: true,
-		},
-	}
 }
