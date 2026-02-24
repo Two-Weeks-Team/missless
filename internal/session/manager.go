@@ -4,11 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/genai"
 )
+
+// NotifyFunc sends a JSON event to the browser.
+type NotifyFunc func(v any)
 
 // Manager orchestrates the session lifecycle.
 // Lock ordering: Manager.mu is Level 1 (highest priority).
@@ -20,7 +24,10 @@ type Manager struct {
 	personaName  string
 	matchedVoice string
 	languageCode string
+	personality  string
+	speechStyle  string
 	createdAt    time.Time
+	notifyFn     NotifyFunc
 }
 
 // NewManager creates a new session manager.
@@ -30,6 +37,13 @@ func NewManager(sessionID string) *Manager {
 		state:     StateOnboarding,
 		createdAt: time.Now(),
 	}
+}
+
+// SetNotifyFunc sets the callback for sending events to the browser.
+func (m *Manager) SetNotifyFunc(fn NotifyFunc) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.notifyFn = fn
 }
 
 // State returns the current session state.
@@ -45,12 +59,14 @@ func (m *Manager) SessionID() string {
 }
 
 // SetPersona stores the matched persona details on the manager.
-func (m *Manager) SetPersona(name, voice, langCode string) {
+func (m *Manager) SetPersona(name, voice, langCode, personality, speechStyle string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.personaName = name
 	m.matchedVoice = voice
 	m.languageCode = langCode
+	m.personality = personality
+	m.speechStyle = speechStyle
 	slog.Info("persona_set", "session", m.sessionID, "name", name, "voice", voice)
 }
 
@@ -87,6 +103,43 @@ func (m *Manager) TransitionTo(target State) error {
 	return nil
 }
 
+// TransitionToReunion orchestrates the full onboarding→reunion transition.
+// Steps: analyzing → transitioning (notify browser) → reunion (swap session).
+func (m *Manager) TransitionToReunion(ctx context.Context) error {
+	// State: onboarding → analyzing (video analysis started).
+	if err := m.TransitionTo(StateAnalyzing); err != nil {
+		return fmt.Errorf("transition to analyzing: %w", err)
+	}
+
+	// State: analyzing → transitioning.
+	if err := m.TransitionTo(StateTransitioning); err != nil {
+		return fmt.Errorf("transition to transitioning: %w", err)
+	}
+
+	// Notify browser: "잠시 눈을 감아보세요..."
+	m.notify(map[string]any{
+		"type":    "session_transition",
+		"message": "잠시 눈을 감아보세요...",
+		"persona": m.PersonaName(),
+		"voice":   m.MatchedVoice(),
+	})
+
+	// State: transitioning → reunion.
+	if err := m.TransitionTo(StateReunion); err != nil {
+		return fmt.Errorf("transition to reunion: %w", err)
+	}
+
+	// Notify browser: session ready.
+	m.notify(map[string]any{
+		"type":    "session_ready",
+		"state":   "reunion",
+		"persona": m.PersonaName(),
+		"voice":   m.MatchedVoice(),
+	})
+
+	return nil
+}
+
 // BuildOnboardingConfig creates the LiveConnectConfig for the onboarding phase.
 // System voice: Aoede (missless host), warm guide in Korean.
 func (m *Manager) BuildOnboardingConfig() *genai.LiveConnectConfig {
@@ -118,82 +171,88 @@ Keep responses concise for voice — avoid long monologues.`),
 		},
 		Tools: []*genai.Tool{
 			{
-				FunctionDeclarations: []*genai.FunctionDeclaration{
-					{
-						Name:        "generate_scene",
-						Description: "Generate a high-quality background scene image with 2-stage progressive rendering",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"prompt":     {Type: genai.TypeString, Description: "Scene description prompt"},
-								"mood":       {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
-								"characters": {Type: genai.TypeString, Description: "Character descriptions for the scene"},
-							},
-							Required: []string{"prompt", "mood"},
-						},
-					},
-					{
-						Name:        "generate_fast_scene",
-						Description: "Generate a quick preview-only scene image for rapid visual feedback",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"prompt": {Type: genai.TypeString, Description: "Scene description prompt"},
-								"mood":   {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
-							},
-							Required: []string{"prompt", "mood"},
-						},
-					},
-					{
-						Name:        "change_atmosphere",
-						Description: "Change the background music to match the conversation mood",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"mood": {Type: genai.TypeString, Description: "Target mood for BGM (warm, nostalgic, joyful, bittersweet)"},
-							},
-							Required: []string{"mood"},
-						},
-					},
-					{
-						Name:        "recall_memory",
-						Description: "Search shared memories relevant to the current conversation topic",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"query": {Type: genai.TypeString, Description: "Search query for relevant memories"},
-							},
-							Required: []string{"query"},
-						},
-					},
-					{
-						Name:        "analyze_user",
-						Description: "Analyze the user's emotional state and engagement level",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"aspect": {Type: genai.TypeString, Description: "Aspect to analyze (emotion, engagement, comfort)"},
-							},
-							Required: []string{"aspect"},
-						},
-					},
-					{
-						Name:        "end_reunion",
-						Description: "End the reunion session and generate a memory album",
-						Parameters: &genai.Schema{
-							Type: genai.TypeObject,
-							Properties: map[string]*genai.Schema{
-								"reason": {Type: genai.TypeString, Description: "Reason for ending (user_request, natural_end, timeout)"},
-							},
-							Required: []string{"reason"},
-						},
-					},
-				},
+				FunctionDeclarations: onboardingTools(),
 			},
 		},
 		SessionResumption: &genai.SessionResumptionConfig{
 			Transparent: true,
 		},
+	}
+}
+
+// BuildReunionConfig creates the LiveConnectConfig for the reunion phase.
+// Uses the persona's matched HD voice and personality as system instruction.
+func (m *Manager) BuildReunionConfig() *genai.LiveConnectConfig {
+	m.mu.Lock()
+	voice := m.matchedVoice
+	name := m.personaName
+	personality := m.personality
+	speechStyle := m.speechStyle
+	lang := m.languageCode
+	m.mu.Unlock()
+
+	if voice == "" {
+		voice = "Aoede" // fallback
+	}
+
+	sysInstruction := buildReunionSystemInstruction(name, personality, speechStyle, lang)
+
+	return &genai.LiveConnectConfig{
+		ResponseModalities: []genai.Modality{genai.ModalityAudio, genai.ModalityText},
+		SpeechConfig: &genai.SpeechConfig{
+			VoiceConfig: &genai.VoiceConfig{
+				PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{
+					VoiceName: voice,
+				},
+			},
+		},
+		SystemInstruction: &genai.Content{
+			Parts: []*genai.Part{
+				genai.NewPartFromText(sysInstruction),
+			},
+		},
+		Tools: []*genai.Tool{
+			{
+				FunctionDeclarations: reunionTools(),
+			},
+		},
+		SessionResumption: &genai.SessionResumptionConfig{
+			Transparent: true,
+		},
+	}
+}
+
+// BuildOnboardingSummary creates a summary of the onboarding conversation
+// to inject as client content into the reunion session.
+func (m *Manager) BuildOnboardingSummary() string {
+	m.mu.Lock()
+	name := m.personaName
+	voice := m.matchedVoice
+	personality := m.personality
+	speechStyle := m.speechStyle
+	lang := m.languageCode
+	m.mu.Unlock()
+
+	var sb strings.Builder
+	sb.WriteString("=== Onboarding Summary ===\n")
+	sb.WriteString(fmt.Sprintf("Persona: %s\n", name))
+	sb.WriteString(fmt.Sprintf("Matched Voice: %s\n", voice))
+	sb.WriteString(fmt.Sprintf("Personality: %s\n", personality))
+	sb.WriteString(fmt.Sprintf("Speech Style: %s\n", speechStyle))
+	sb.WriteString(fmt.Sprintf("Language: %s\n", lang))
+	sb.WriteString("The user has just completed onboarding and is about to experience a reunion.\n")
+	sb.WriteString("Begin the reunion naturally, as if meeting after a long time.\n")
+	return sb.String()
+}
+
+// notify sends an event to the browser if the notify function is set.
+func (m *Manager) notify(v any) {
+	m.mu.Lock()
+	fn := m.notifyFn
+	m.mu.Unlock()
+
+	if fn != nil {
+		fn(v)
 	}
 }
 
@@ -203,4 +262,174 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	defer m.mu.Unlock()
 	m.state = StateEnded
 	slog.Info("session_shutdown", "session", m.sessionID)
+}
+
+func buildReunionSystemInstruction(name, personality, speechStyle, lang string) string {
+	langNote := "Speak naturally in Korean."
+	if lang != "" && lang != "ko" {
+		langNote = fmt.Sprintf("Speak naturally in the language code '%s'.", lang)
+	}
+
+	return fmt.Sprintf(`You are %s. You are having a reunion with someone who misses you deeply.
+
+Personality: %s
+Speech style: %s
+
+Guidelines:
+1. Stay completely in character as %s — never break character
+2. Greet warmly as if meeting after a long time apart
+3. Reference shared memories and experiences naturally
+4. Show genuine emotion and warmth
+5. %s
+6. Keep responses natural and conversational for voice
+7. React to the user's emotions with empathy and understanding
+8. Use characteristic phrases and speech patterns`, name, personality, speechStyle, name, langNote)
+}
+
+func onboardingTools() []*genai.FunctionDeclaration {
+	return []*genai.FunctionDeclaration{
+		{
+			Name:        "generate_scene",
+			Description: "Generate a high-quality background scene image with 2-stage progressive rendering",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"prompt":     {Type: genai.TypeString, Description: "Scene description prompt"},
+					"mood":       {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
+					"characters": {Type: genai.TypeString, Description: "Character descriptions for the scene"},
+				},
+				Required: []string{"prompt", "mood"},
+			},
+		},
+		{
+			Name:        "generate_fast_scene",
+			Description: "Generate a quick preview-only scene image for rapid visual feedback",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"prompt": {Type: genai.TypeString, Description: "Scene description prompt"},
+					"mood":   {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
+				},
+				Required: []string{"prompt", "mood"},
+			},
+		},
+		{
+			Name:        "change_atmosphere",
+			Description: "Change the background music to match the conversation mood",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"mood": {Type: genai.TypeString, Description: "Target mood for BGM (warm, nostalgic, joyful, bittersweet)"},
+				},
+				Required: []string{"mood"},
+			},
+		},
+		{
+			Name:        "recall_memory",
+			Description: "Search shared memories relevant to the current conversation topic",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"query": {Type: genai.TypeString, Description: "Search query for relevant memories"},
+				},
+				Required: []string{"query"},
+			},
+		},
+		{
+			Name:        "analyze_user",
+			Description: "Analyze the user's emotional state and engagement level",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"aspect": {Type: genai.TypeString, Description: "Aspect to analyze (emotion, engagement, comfort)"},
+				},
+				Required: []string{"aspect"},
+			},
+		},
+		{
+			Name:        "end_reunion",
+			Description: "End the reunion session and generate a memory album",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"reason": {Type: genai.TypeString, Description: "Reason for ending (user_request, natural_end, timeout)"},
+				},
+				Required: []string{"reason"},
+			},
+		},
+	}
+}
+
+func reunionTools() []*genai.FunctionDeclaration {
+	return []*genai.FunctionDeclaration{
+		{
+			Name:        "generate_scene",
+			Description: "Generate a background scene based on the conversation topic",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"prompt":     {Type: genai.TypeString, Description: "Scene description prompt"},
+					"mood":       {Type: genai.TypeString, Description: "Emotional mood"},
+					"characters": {Type: genai.TypeString, Description: "Character descriptions"},
+				},
+				Required: []string{"prompt", "mood"},
+			},
+		},
+		{
+			Name:        "generate_fast_scene",
+			Description: "Quick preview scene for rapid visual feedback",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"prompt": {Type: genai.TypeString, Description: "Scene description prompt"},
+					"mood":   {Type: genai.TypeString, Description: "Emotional mood"},
+				},
+				Required: []string{"prompt", "mood"},
+			},
+		},
+		{
+			Name:        "change_atmosphere",
+			Description: "Change background music mood",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"mood": {Type: genai.TypeString, Description: "Target mood for BGM"},
+				},
+				Required: []string{"mood"},
+			},
+		},
+		{
+			Name:        "recall_memory",
+			Description: "Search shared memories from the past",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"query": {Type: genai.TypeString, Description: "Memory search query"},
+				},
+				Required: []string{"query"},
+			},
+		},
+		{
+			Name:        "analyze_user",
+			Description: "Analyze the user's emotional state",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"aspect": {Type: genai.TypeString, Description: "Aspect to analyze"},
+				},
+				Required: []string{"aspect"},
+			},
+		},
+		{
+			Name:        "end_reunion",
+			Description: "End the reunion and generate a memory album",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"reason": {Type: genai.TypeString, Description: "Reason for ending"},
+				},
+				Required: []string{"reason"},
+			},
+		},
+	}
 }
