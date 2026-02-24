@@ -1,6 +1,7 @@
 package scene
 
 import (
+	"sync"
 	"testing"
 
 	"google.golang.org/genai"
@@ -158,6 +159,133 @@ func TestNewGenerator(t *testing.T) {
 	anchor := gen.getAnchor()
 	if anchor == nil {
 		t.Fatal("expected anchor after SetAnchor")
+	}
+}
+
+func TestCharacterAnchor_UpdateLastScene(t *testing.T) {
+	anchor := NewCharacterAnchor()
+
+	// Initially empty.
+	if anchor.GetLastScene() != "" {
+		t.Fatal("expected empty last scene initially")
+	}
+
+	// Set scene.
+	anchor.UpdateLastScene("scene-1-base64")
+	if anchor.GetLastScene() != "scene-1-base64" {
+		t.Fatalf("expected 'scene-1-base64', got %q", anchor.GetLastScene())
+	}
+
+	// Overwrite with new scene.
+	anchor.UpdateLastScene("scene-2-base64")
+	if anchor.GetLastScene() != "scene-2-base64" {
+		t.Fatalf("expected 'scene-2-base64', got %q", anchor.GetLastScene())
+	}
+}
+
+func TestCharacterAnchor_GetRefParts_WithImages(t *testing.T) {
+	anchor := NewCharacterAnchor()
+	anchor.AddRefImage([]byte{0xFF, 0xD8, 0x01})
+	anchor.AddRefImage([]byte{0xFF, 0xD8, 0x02})
+	anchor.AddRefImage([]byte{0xFF, 0xD8, 0x03})
+
+	parts := anchor.GetRefParts()
+	if len(parts) != 3 {
+		t.Fatalf("expected 3 parts, got %d", len(parts))
+	}
+
+	for i, part := range parts {
+		if part.InlineData == nil {
+			t.Fatalf("part[%d]: expected InlineData", i)
+		}
+		if part.InlineData.MIMEType != "image/jpeg" {
+			t.Fatalf("part[%d]: expected MIME 'image/jpeg', got %q", i, part.InlineData.MIMEType)
+		}
+		if len(part.InlineData.Data) == 0 {
+			t.Fatalf("part[%d]: expected non-empty data", i)
+		}
+	}
+
+	// Verify data matches the original images.
+	if parts[0].InlineData.Data[2] != 0x01 {
+		t.Fatalf("expected first image data byte 0x01, got %x", parts[0].InlineData.Data[2])
+	}
+	if parts[2].InlineData.Data[2] != 0x03 {
+		t.Fatalf("expected third image data byte 0x03, got %x", parts[2].InlineData.Data[2])
+	}
+}
+
+func TestCharacterAnchor_GetRefParts_Empty(t *testing.T) {
+	anchor := NewCharacterAnchor()
+
+	parts := anchor.GetRefParts()
+	if parts != nil {
+		t.Fatalf("expected nil parts for empty anchor, got %d parts", len(parts))
+	}
+}
+
+func TestCharacterAnchor_Concurrency(t *testing.T) {
+	anchor := NewCharacterAnchor()
+
+	var wg sync.WaitGroup
+	const goroutines = 50
+
+	// Concurrent writes and reads — should not race.
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			anchor.AddRefImage([]byte{byte(n)})
+			anchor.GetRefImages()
+			anchor.GetRefParts()
+			anchor.UpdateLastScene("scene-from-goroutine")
+			anchor.GetLastScene()
+			anchor.SilhouetteGuide()
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify FIFO: at most maxRefImages.
+	images := anchor.GetRefImages()
+	if len(images) > maxRefImages {
+		t.Fatalf("expected at most %d images, got %d", maxRefImages, len(images))
+	}
+}
+
+func TestCharacterAnchor_SilhouetteGuide(t *testing.T) {
+	anchor := NewCharacterAnchor()
+	guide := anchor.SilhouetteGuide()
+
+	if guide == "" {
+		t.Fatal("expected non-empty silhouette guide")
+	}
+	if !contains(guide, "silhouette") {
+		t.Fatal("expected 'silhouette' in guide")
+	}
+	if !contains(guide, "back") {
+		t.Fatal("expected 'back' in guide")
+	}
+}
+
+func TestBuildPrompt_WithSilhouetteGuide(t *testing.T) {
+	gen := &Generator{anchor: NewCharacterAnchor()}
+	gen.anchor.AddRefImage([]byte{0xFF, 0xD8, 0x01})
+
+	prompt := gen.buildPrompt("park scene", "warm", "family")
+
+	if !contains(prompt, "silhouette") {
+		t.Fatalf("expected silhouette guide in prompt when ref images exist, got: %s", prompt)
+	}
+}
+
+func TestBuildPrompt_NoSilhouetteWithoutImages(t *testing.T) {
+	gen := &Generator{anchor: NewCharacterAnchor()}
+
+	prompt := gen.buildPrompt("park scene", "warm", "family")
+
+	if contains(prompt, "silhouette") {
+		t.Fatalf("expected no silhouette guide without ref images, got: %s", prompt)
 	}
 }
 
