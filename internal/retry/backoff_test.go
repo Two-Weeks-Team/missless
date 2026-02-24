@@ -3,6 +3,7 @@ package retry
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -46,6 +47,12 @@ func TestWithBackoff_MaxRetriesExceeded(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error after max retries")
+	}
+	if !strings.Contains(err.Error(), "all 3 retries failed") {
+		t.Fatalf("expected 'all 3 retries failed' error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "persistent error") {
+		t.Fatalf("expected wrapped original error, got: %v", err)
 	}
 	if calls != 3 {
 		t.Fatalf("expected 3 calls, got %d", calls)

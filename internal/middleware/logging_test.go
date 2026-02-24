@@ -52,4 +52,7 @@ func TestResponseWriter_WriteHeader(t *testing.T) {
 	if rw.statusCode != http.StatusNotFound {
 		t.Fatalf("expected statusCode 404, got %d", rw.statusCode)
 	}
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected underlying ResponseWriter to receive 404, got %d", w.Code)
+	}
 }

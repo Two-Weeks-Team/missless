@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"testing"
 )
 
@@ -34,7 +33,7 @@ func TestConfigLoad_MissingProjectID(t *testing.T) {
 func TestConfigLoad_DefaultPort(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test-key")
 	t.Setenv("GCP_PROJECT_ID", "test-project")
-	os.Unsetenv("PORT")
+	t.Setenv("PORT", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -62,6 +61,10 @@ func TestConfigLoad_CustomPort(t *testing.T) {
 func TestConfigLoad_Defaults(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test-key")
 	t.Setenv("GCP_PROJECT_ID", "test-project")
+	t.Setenv("PORT", "")
+	t.Setenv("DOMAIN", "")
+	t.Setenv("ENVIRONMENT", "")
+	t.Setenv("FIRESTORE_DB", "")
 
 	cfg, err := Load()
 	if err != nil {
