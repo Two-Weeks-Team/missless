@@ -53,7 +53,7 @@ func TestBuildOnboardingConfig(t *testing.T) {
 		}
 	}
 
-	expected := []string{"generate_scene", "change_atmosphere", "end_reunion"}
+	expected := []string{"generate_scene", "generate_fast_scene", "change_atmosphere", "recall_memory", "analyze_user", "end_reunion"}
 	for _, name := range expected {
 		if !toolNames[name] {
 			t.Fatalf("expected tool %s in declarations", name)

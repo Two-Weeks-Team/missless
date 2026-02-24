@@ -139,13 +139,25 @@ Speak naturally in Korean unless the user prefers another language.`),
 				FunctionDeclarations: []*genai.FunctionDeclaration{
 					{
 						Name:        "generate_scene",
-						Description: "Generate a background scene image based on the conversation mood and context",
+						Description: "Generate a high-quality background scene image with 2-stage progressive rendering",
 						Parameters: &genai.Schema{
 							Type: genai.TypeObject,
 							Properties: map[string]*genai.Schema{
 								"prompt":     {Type: genai.TypeString, Description: "Scene description prompt"},
 								"mood":       {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
 								"characters": {Type: genai.TypeString, Description: "Character descriptions for the scene"},
+							},
+							Required: []string{"prompt", "mood"},
+						},
+					},
+					{
+						Name:        "generate_fast_scene",
+						Description: "Generate a quick preview-only scene image for rapid visual feedback",
+						Parameters: &genai.Schema{
+							Type: genai.TypeObject,
+							Properties: map[string]*genai.Schema{
+								"prompt": {Type: genai.TypeString, Description: "Scene description prompt"},
+								"mood":   {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
 							},
 							Required: []string{"prompt", "mood"},
 						},
@@ -159,6 +171,28 @@ Speak naturally in Korean unless the user prefers another language.`),
 								"mood": {Type: genai.TypeString, Description: "Target mood for BGM (warm, nostalgic, joyful, bittersweet)"},
 							},
 							Required: []string{"mood"},
+						},
+					},
+					{
+						Name:        "recall_memory",
+						Description: "Search shared memories relevant to the current conversation topic",
+						Parameters: &genai.Schema{
+							Type: genai.TypeObject,
+							Properties: map[string]*genai.Schema{
+								"query": {Type: genai.TypeString, Description: "Search query for relevant memories"},
+							},
+							Required: []string{"query"},
+						},
+					},
+					{
+						Name:        "analyze_user",
+						Description: "Analyze the user's emotional state and engagement level",
+						Parameters: &genai.Schema{
+							Type: genai.TypeObject,
+							Properties: map[string]*genai.Schema{
+								"aspect": {Type: genai.TypeString, Description: "Aspect to analyze (emotion, engagement, comfort)"},
+							},
+							Required: []string{"aspect"},
 						},
 					},
 					{

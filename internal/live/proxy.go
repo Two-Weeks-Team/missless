@@ -46,13 +46,16 @@ type Proxy struct {
 
 // NewProxy creates a new proxy instance.
 func NewProxy(browserConn *websocket.Conn, liveSession *genai.Session, toolHandler *ToolHandler) *Proxy {
-	return &Proxy{
+	p := &Proxy{
 		browserConn:   browserConn,
 		liveSession:   liveSession,
 		toolHandler:   toolHandler,
 		done:          make(chan struct{}),
 		sendToBrowser: make(chan []byte, browserSendBufSize),
 	}
+	// Wire tool handler events to browser via the proxy send channel.
+	toolHandler.SetEventSender(p.sendJSON)
+	return p
 }
 
 // SetReconnectParams stores the client, model, and config needed for GoAway reconnection.
