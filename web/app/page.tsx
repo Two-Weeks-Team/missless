@@ -6,6 +6,7 @@ import { useAudio } from '../hooks/useAudio';
 import SceneDisplay from '../components/SceneDisplay';
 import SessionTransition from '../components/SessionTransition';
 import OnboardingFlow, { type OnboardingStage } from '../components/OnboardingFlow';
+import BGMPlayer from '../components/BGMPlayer';
 import type { YouTubeVideo } from '../components/YouTubeGrid';
 import type { Highlight } from '../components/HighlightCard';
 
@@ -33,6 +34,7 @@ export default function Home() {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [analysisStep, setAnalysisStep] = useState('');
   const [analysisPercent, setAnalysisPercent] = useState(0);
+  const [bgmUrl, setBgmUrl] = useState<string | null>(null);
 
   const { initAudioContext, playPCM, cleanup: cleanupAudio } = useAudio();
 
@@ -65,6 +67,11 @@ export default function Home() {
       case 'person_detected':
         setPersonCrops(msg.crops);
         setOnboardingStage('person_select');
+        break;
+      case 'atmosphere_change':
+        if (msg.bgm_url) {
+          setBgmUrl(msg.bgm_url);
+        }
         break;
       case 'analysis_progress':
         setOnboardingStage('analyzing');
@@ -125,6 +132,7 @@ export default function Home() {
     setHighlights([]);
     setAnalysisStep('');
     setAnalysisPercent(0);
+    setBgmUrl(null);
   };
 
   const handleSelectVideo = useCallback((videoId: string) => {
@@ -176,6 +184,7 @@ export default function Home() {
   return (
     <main style={{ position: 'relative', height: '100dvh', width: '100dvw' }}>
       <SceneDisplay previewSrc={previewSrc} finalSrc={finalSrc} />
+      <BGMPlayer bgmUrl={bgmUrl} />
       <SessionTransition phase={transition} />
       <OnboardingFlow
         stage={onboardingStage}

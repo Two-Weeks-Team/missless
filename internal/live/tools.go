@@ -150,13 +150,14 @@ func (h *ToolHandler) handleChangeAtmosphere(ctx context.Context, args map[strin
 		return errResp, nil
 	}
 
+	bgm := GetPresetBGMURL(mood)
 	h.emitEvent(map[string]any{
-		"type": "atmosphere_change",
-		"mood": mood,
+		"type":    "atmosphere_change",
+		"mood":    bgm.Mood,
+		"bgm_url": bgm.URL,
 	})
 
-	// TODO: T15 - Preset BGM selection + crossfade
-	return map[string]any{"status": "atmosphere changed", "mood": mood}, nil
+	return map[string]any{"status": "atmosphere changed", "mood": bgm.Mood, "bgm_url": bgm.URL}, nil
 }
 
 func (h *ToolHandler) handleRecallMemory(ctx context.Context, args map[string]any) (map[string]any, error) {
