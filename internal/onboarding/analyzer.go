@@ -2,11 +2,15 @@ package onboarding
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
 	"github.com/Two-Weeks-Team/missless/internal/retry"
+	"google.golang.org/genai"
 )
+
+const analysisModel = "gemini-2.5-pro-preview-05-06"
 
 // VideoAnalysis holds the results of YouTube video analysis.
 type VideoAnalysis struct {
@@ -24,32 +28,72 @@ type Highlight struct {
 	Expression  string `json:"expression"`
 }
 
+// generateFunc abstracts Gemini content generation for testability.
+type generateFunc func(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error)
+
 // Analyzer analyzes YouTube videos using Gemini 2.5 Pro.
 type Analyzer struct {
-	// TODO: T08 - Add genai.Client field
+	generate generateFunc
+}
+
+// NewAnalyzer creates a new video analyzer with a genai client.
+func NewAnalyzer(client *genai.Client) *Analyzer {
+	return &Analyzer{
+		generate: func(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+			return client.Models.GenerateContent(ctx, model, contents, config)
+		},
+	}
 }
 
 // AnalyzeYouTubeURL analyzes a YouTube URL directly without downloading.
 // Model: gemini-2.5-pro (supports YouTube URL as FileData)
 // Only public videos are supported (unlisted → gallery fallback).
-func (a *Analyzer) AnalyzeYouTubeURL(ctx context.Context, videoURL, targetPerson string) (*VideoAnalysis, error) {
+func (a *Analyzer) AnalyzeYouTubeURL(ctx context.Context, videoURL, targetPerson string, progressFn func(string, int)) (*VideoAnalysis, error) {
 	slog.Info("youtube_analysis_start", "url", videoURL, "target", targetPerson)
+	return a.analyzeWithFileData(ctx, &genai.FileData{FileURI: videoURL}, targetPerson, progressFn)
+}
 
+// AnalyzeUploadedFile analyzes a file referenced by Gemini File API URI.
+// Used for gallery fallback when videos are unlisted/private.
+func (a *Analyzer) AnalyzeUploadedFile(ctx context.Context, fileURI, mimeType, targetPerson string, progressFn func(string, int)) (*VideoAnalysis, error) {
+	slog.Info("file_analysis_start", "uri", fileURI, "target", targetPerson)
+	return a.analyzeWithFileData(ctx, &genai.FileData{FileURI: fileURI, MIMEType: mimeType}, targetPerson, progressFn)
+}
+
+// analyzeWithFileData is the shared analysis logic for both YouTube URLs and uploaded files.
+func (a *Analyzer) analyzeWithFileData(ctx context.Context, fileData *genai.FileData, targetPerson string, progressFn func(string, int)) (*VideoAnalysis, error) {
+	progressFn("Preparing analysis", 10)
 	prompt := buildAnalysisPrompt(targetPerson)
-	_ = prompt // will be used in T08 genai call
 
 	var result *VideoAnalysis
 	err := retry.WithBackoff(ctx, 3, func() error {
-		// TODO: T08 - Call gemini-2.5-pro with FileData{FileURI: videoURL}
-		// Use ResponseMIMEType: "application/json" for structured output
-		// Temperature: 0.2 for factual analysis
-		return fmt.Errorf("not yet implemented")
+		progressFn("Sending to Gemini", 20)
+
+		temp := float32(0.2)
+		resp, err := a.generate(ctx, analysisModel, []*genai.Content{
+			{Parts: []*genai.Part{
+				{FileData: fileData},
+				genai.NewPartFromText(prompt),
+			}},
+		}, &genai.GenerateContentConfig{
+			ResponseMIMEType: "application/json",
+			Temperature:      &temp,
+		})
+		if err != nil {
+			return fmt.Errorf("gemini generate: %w", err)
+		}
+
+		progressFn("Parsing results", 70)
+
+		result, err = parseAnalysis(resp)
+		return err
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("youtube analysis failed: %w", err)
+		return nil, fmt.Errorf("analysis failed: %w", err)
 	}
 
+	progressFn("Analysis complete", 90)
 	return result, nil
 }
 
@@ -65,4 +109,28 @@ Extract:
 
 Focus only on "%s" if multiple people present.
 Output JSON only.`, targetPerson, targetPerson)
+}
+
+// parseAnalysis extracts VideoAnalysis from a Gemini response.
+func parseAnalysis(resp *genai.GenerateContentResponse) (*VideoAnalysis, error) {
+	if resp == nil || len(resp.Candidates) == 0 {
+		return nil, fmt.Errorf("empty response from Gemini")
+	}
+
+	candidate := resp.Candidates[0]
+	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
+		return nil, fmt.Errorf("no content parts in response")
+	}
+
+	for _, part := range candidate.Content.Parts {
+		if part.Text != "" {
+			var analysis VideoAnalysis
+			if err := json.Unmarshal([]byte(part.Text), &analysis); err != nil {
+				return nil, fmt.Errorf("parse analysis JSON: %w", err)
+			}
+			return &analysis, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no text content in response")
 }

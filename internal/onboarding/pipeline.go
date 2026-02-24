@@ -4,7 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
+
+	"github.com/Two-Weeks-Team/missless/internal/util"
 )
+
+// maxConcurrentAnalyses limits parallel video analysis to avoid rate limits.
+const maxConcurrentAnalyses = 2
 
 // Persona represents a generated persona profile.
 type Persona struct {
@@ -64,7 +70,48 @@ func (p *Pipeline) Run(ctx context.Context, videoURLs []string, targetPerson str
 	return persona, nil
 }
 
+// analyzeVideos runs video analysis in parallel with a semaphore.
 func (p *Pipeline) analyzeVideos(ctx context.Context, urls []string, target string, progressFn func(string, int)) ([]*VideoAnalysis, error) {
-	// TODO: T08/T09 - Parallel video analysis with semaphore (max 2 concurrent)
-	return nil, fmt.Errorf("not yet implemented")
+	sem := make(chan struct{}, maxConcurrentAnalyses)
+	var mu sync.Mutex
+	var analyses []*VideoAnalysis
+	var firstErr error
+	var wg sync.WaitGroup
+
+	for i, url := range urls {
+		wg.Add(1)
+		idx, videoURL := i, url
+
+		util.SafeGo(func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			analysis, err := p.analyzer.AnalyzeYouTubeURL(ctx, videoURL, target, func(step string, pct int) {
+				// Scale progress within video analysis phase (0-50%).
+				basePct := 50 * idx / len(urls)
+				scaled := basePct + (pct * 50 / (100 * len(urls)))
+				progressFn(fmt.Sprintf("[Video %d/%d] %s", idx+1, len(urls), step), scaled)
+			})
+
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				slog.Warn("video_analysis_failed", "url", videoURL, "error", err)
+				if firstErr == nil {
+					firstErr = err
+				}
+			} else {
+				analyses = append(analyses, analysis)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	if len(analyses) == 0 && firstErr != nil {
+		return nil, firstErr
+	}
+
+	return analyses, nil
 }
