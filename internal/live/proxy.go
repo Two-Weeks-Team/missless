@@ -28,6 +28,22 @@ func NewProxy(browserConn *websocket.Conn, toolHandler *ToolHandler) *Proxy {
 	}
 }
 
+// Run starts the bidirectional proxy forwarding goroutines.
+func (p *Proxy) Run(ctx context.Context) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.wg.Add(2)
+	go func() {
+		defer p.wg.Done()
+		p.forwardBrowserToLive(ctx)
+	}()
+	go func() {
+		defer p.wg.Done()
+		p.forwardLiveToBrowser(ctx)
+	}()
+}
+
 // forwardBrowserToLive reads from browser WebSocket and sends to Live API.
 func (p *Proxy) forwardBrowserToLive(ctx context.Context) {
 	defer func() {

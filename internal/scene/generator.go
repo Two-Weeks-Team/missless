@@ -57,6 +57,13 @@ func (g *Generator) GenerateProgressive(ctx context.Context, prompt, mood, chara
 	})
 }
 
+// SetAnchor updates the character anchor used for consistency.
+func (g *Generator) SetAnchor(anchor *CharacterAnchor) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.anchor = anchor
+}
+
 func (g *Generator) generateFlash(ctx context.Context, prompt, mood, characters string) (string, error) {
 	// TODO: T05 - Call gemini-2.5-flash-image
 	return "", fmt.Errorf("not yet implemented")

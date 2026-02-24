@@ -35,6 +35,9 @@ type Analyzer struct {
 func (a *Analyzer) AnalyzeYouTubeURL(ctx context.Context, videoURL, targetPerson string) (*VideoAnalysis, error) {
 	slog.Info("youtube_analysis_start", "url", videoURL, "target", targetPerson)
 
+	prompt := buildAnalysisPrompt(targetPerson)
+	_ = prompt // will be used in T08 genai call
+
 	var result *VideoAnalysis
 	err := retry.WithBackoff(ctx, 3, func() error {
 		// TODO: T08 - Call gemini-2.5-pro with FileData{FileURI: videoURL}
