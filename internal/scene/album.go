@@ -2,6 +2,8 @@ package scene
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -15,11 +17,27 @@ type AlbumScene struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// Album is the final compiled album data.
+type Album struct {
+	ID        string       `json:"id"`
+	Scenes    []AlbumScene `json:"scenes"`
+	Summary   string       `json:"summary"`
+	Persona   string       `json:"persona"`
+	CreatedAt time.Time    `json:"createdAt"`
+	ShareURL  string       `json:"shareUrl"`
+}
+
+// UploadFunc uploads an image and returns its public URL.
+// For hackathon, this is a no-op that returns the input URL.
+type UploadFunc func(ctx context.Context, imageData, filename string) (string, error)
+
 // AlbumGenerator compiles reunion scenes into a shareable album.
 // Lock ordering: AlbumGenerator.mu is Level 5.
 type AlbumGenerator struct {
-	mu     sync.Mutex
-	scenes []AlbumScene
+	mu       sync.Mutex
+	scenes   []AlbumScene
+	persona  string
+	uploadFn UploadFunc
 }
 
 // NewAlbumGenerator creates a new album generator.
@@ -29,8 +47,21 @@ func NewAlbumGenerator() *AlbumGenerator {
 	}
 }
 
+// SetPersona sets the persona name for the album.
+func (ag *AlbumGenerator) SetPersona(name string) {
+	ag.mu.Lock()
+	defer ag.mu.Unlock()
+	ag.persona = name
+}
+
+// SetUploadFunc sets the upload function for Cloud Storage.
+func (ag *AlbumGenerator) SetUploadFunc(fn UploadFunc) {
+	ag.mu.Lock()
+	defer ag.mu.Unlock()
+	ag.uploadFn = fn
+}
+
 // RecordScene adds a scene to the album.
-// I/O (Cloud Storage upload) must happen OUTSIDE the lock.
 func (ag *AlbumGenerator) RecordScene(imageURL, caption string) {
 	ag.mu.Lock()
 	defer ag.mu.Unlock()
@@ -44,23 +75,66 @@ func (ag *AlbumGenerator) RecordScene(imageURL, caption string) {
 	slog.Info("album_scene_recorded", "total", len(ag.scenes))
 }
 
-// Generate creates the final album.
-func (ag *AlbumGenerator) Generate(ctx context.Context, summary string) (string, error) {
+// SceneCount returns the number of recorded scenes.
+func (ag *AlbumGenerator) SceneCount() int {
+	ag.mu.Lock()
+	defer ag.mu.Unlock()
+	return len(ag.scenes)
+}
+
+// CreateAlbum compiles recorded scenes into a shareable album.
+// Upload failures for individual scenes are skipped (best-effort).
+func (ag *AlbumGenerator) CreateAlbum(ctx context.Context, summary string) (*Album, error) {
 	ag.mu.Lock()
 	scenes := make([]AlbumScene, len(ag.scenes))
 	copy(scenes, ag.scenes)
+	persona := ag.persona
+	uploadFn := ag.uploadFn
 	ag.mu.Unlock()
 
 	if len(scenes) == 0 {
-		return "", fmt.Errorf("no scenes to generate album")
+		// Empty album is valid — just no scenes.
+		return &Album{
+			ID:        generateAlbumID(),
+			Scenes:    scenes,
+			Summary:   summary,
+			Persona:   persona,
+			CreatedAt: time.Now(),
+		}, nil
 	}
 
-	// TODO: T18 - Generate album page + OG card
-	// 1. Compile scenes with captions
-	// 2. Generate summary card
-	// 3. Upload to Cloud Storage (albums/ prefix)
-	// 4. Return shareable URL
+	// Upload scenes (best-effort: skip failures).
+	if uploadFn != nil {
+		for i, s := range scenes {
+			filename := fmt.Sprintf("albums/%s/scene_%d.jpg", persona, i)
+			url, err := uploadFn(ctx, s.ImageURL, filename)
+			if err != nil {
+				slog.Warn("album_upload_skipped", "scene", i, "error", err)
+				continue
+			}
+			scenes[i].ImageURL = url
+		}
+	}
 
-	slog.Info("album_generated", "scenes", len(scenes), "summary", summary)
-	return "", fmt.Errorf("not yet implemented")
+	albumID := generateAlbumID()
+	album := &Album{
+		ID:        albumID,
+		Scenes:    scenes,
+		Summary:   summary,
+		Persona:   persona,
+		CreatedAt: time.Now(),
+		ShareURL:  fmt.Sprintf("/album/%s", albumID),
+	}
+
+	slog.Info("album_created", "id", albumID, "scenes", len(scenes), "persona", persona)
+	return album, nil
+}
+
+// generateAlbumID creates a random 8-byte hex album ID.
+func generateAlbumID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("album-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
 }

@@ -20,6 +20,8 @@ type ToolHandler struct {
 	sendEvent func(v any)
 	// generator handles image generation (nil until SetGenerator is called).
 	generator *scene.Generator
+	// albumGen compiles scenes into a shareable album.
+	albumGen *scene.AlbumGenerator
 	// memoryStore handles memory search for recall_memory tool.
 	memoryStore *memory.Store
 	// personaID is the current persona identifier for memory lookups.
@@ -36,6 +38,13 @@ func (h *ToolHandler) SetGenerator(gen *scene.Generator) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.generator = gen
+}
+
+// SetAlbumGenerator sets the album generator for end_reunion.
+func (h *ToolHandler) SetAlbumGenerator(ag *scene.AlbumGenerator) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.albumGen = ag
 }
 
 // SetMemoryStore sets the memory store for recall_memory.
@@ -228,7 +237,25 @@ func (h *ToolHandler) handleEndReunion(ctx context.Context, args map[string]any)
 		"reason": reason,
 	})
 
-	// TODO: T18 - Album generation
+	// Generate album from recorded scenes.
+	h.mu.RLock()
+	ag := h.albumGen
+	h.mu.RUnlock()
+
+	if ag != nil {
+		album, err := ag.CreateAlbum(ctx, "Reunion memories")
+		if err != nil {
+			slog.Warn("album_generation_failed", "error", err)
+		} else {
+			h.emitEvent(map[string]any{
+				"type":     "album_created",
+				"albumId":  album.ID,
+				"shareUrl": album.ShareURL,
+				"scenes":   len(album.Scenes),
+			})
+		}
+	}
+
 	return map[string]any{"status": "reunion ending", "reason": reason}, nil
 }
 
