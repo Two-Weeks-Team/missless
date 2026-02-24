@@ -25,11 +25,13 @@ func TestToolHandler_UnknownTool(t *testing.T) {
 func TestToolHandler_PanicRecovery(t *testing.T) {
 	h := NewToolHandler()
 
-	// Override a handler to trigger a panic by using a tool that panics.
-	// We test the deferred recovery in Handle by calling a known tool
-	// that we'll make panic by passing invalid args that trigger a nil deref.
-	// Instead, let's directly test the recovery mechanism:
-	result, err := panicToolHandler(h)
+	// Set an event sender that panics to test recovery.
+	h.SetEventSender(func(v any) {
+		panic("test panic in event sender")
+	})
+
+	// change_atmosphere calls emitEvent synchronously, which will panic.
+	result, err := h.Handle(context.Background(), "change_atmosphere", map[string]any{"mood": "warm"})
 	if err != nil {
 		t.Fatalf("expected nil error after panic recovery, got %v", err)
 	}
@@ -42,15 +44,34 @@ func TestToolHandler_PanicRecovery(t *testing.T) {
 	}
 }
 
-// panicToolHandler exercises the panic recovery in Handle by using a ToolHandler
-// with a sendEvent that panics when invoked during a tool call.
-func panicToolHandler(h *ToolHandler) (map[string]any, error) {
-	h.SetEventSender(func(v any) {
-		panic("test panic in event sender")
-	})
-	// generate_scene calls emitEvent via SafeGo (async), so we need a tool
-	// that calls emitEvent synchronously. change_atmosphere does this.
-	return h.Handle(context.Background(), "change_atmosphere", map[string]any{"mood": "warm"})
+func TestToolHandler_MissingArgs(t *testing.T) {
+	h := NewToolHandler()
+	ctx := context.Background()
+
+	tests := []struct {
+		name string
+		args map[string]any
+	}{
+		{"generate_scene", nil},
+		{"generate_scene", map[string]any{"prompt": "test"}},
+		{"generate_fast_scene", map[string]any{}},
+		{"change_atmosphere", map[string]any{}},
+		{"recall_memory", map[string]any{}},
+		{"analyze_user", map[string]any{}},
+		{"end_reunion", map[string]any{}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := h.Handle(ctx, tc.name, tc.args)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if _, hasErr := result["error"]; !hasErr {
+				t.Fatalf("expected error for missing args, got: %v", result)
+			}
+		})
+	}
 }
 
 func TestToolHandler_Latency(t *testing.T) {
@@ -134,6 +155,9 @@ func TestToolHandler_EventSender(t *testing.T) {
 func TestToolHandler_AsyncSceneEvents(t *testing.T) {
 	h := NewToolHandler()
 
+	var wg sync.WaitGroup
+	wg.Add(2) // Expect 2 events: scene_preview + scene_final
+
 	var mu sync.Mutex
 	var events []map[string]any
 
@@ -143,6 +167,7 @@ func TestToolHandler_AsyncSceneEvents(t *testing.T) {
 			events = append(events, m)
 		}
 		mu.Unlock()
+		wg.Done()
 	})
 
 	_, err := h.Handle(context.Background(), "generate_scene", map[string]any{
@@ -153,8 +178,18 @@ func TestToolHandler_AsyncSceneEvents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Wait for async goroutine to complete
-	time.Sleep(100 * time.Millisecond)
+	// Wait for async goroutine with timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for async events")
+	}
 
 	mu.Lock()
 	count := len(events)

@@ -65,9 +65,24 @@ func (h *ToolHandler) Handle(ctx context.Context, toolName string, args map[stri
 	}
 }
 
+// requireStringArg extracts a required string argument from args.
+func requireStringArg(args map[string]any, key string) (string, map[string]any) {
+	v, ok := args[key].(string)
+	if !ok || v == "" {
+		return "", map[string]any{"error": "missing or invalid '" + key + "' argument"}
+	}
+	return v, nil
+}
+
 func (h *ToolHandler) handleGenerateScene(ctx context.Context, args map[string]any) (map[string]any, error) {
-	prompt, _ := args["prompt"].(string)
-	mood, _ := args["mood"].(string)
+	prompt, errResp := requireStringArg(args, "prompt")
+	if errResp != nil {
+		return errResp, nil
+	}
+	mood, errResp := requireStringArg(args, "mood")
+	if errResp != nil {
+		return errResp, nil
+	}
 
 	// Launch async 2-stage progressive rendering via SafeGo.
 	// Stage 1 (preview) runs immediately; Stage 2 (final) follows.
@@ -95,8 +110,14 @@ func (h *ToolHandler) handleGenerateScene(ctx context.Context, args map[string]a
 }
 
 func (h *ToolHandler) handleGenerateFastScene(ctx context.Context, args map[string]any) (map[string]any, error) {
-	prompt, _ := args["prompt"].(string)
-	mood, _ := args["mood"].(string)
+	prompt, errResp := requireStringArg(args, "prompt")
+	if errResp != nil {
+		return errResp, nil
+	}
+	mood, errResp := requireStringArg(args, "mood")
+	if errResp != nil {
+		return errResp, nil
+	}
 
 	// Fast scene uses only the preview model (no final high-res pass).
 	util.SafeGo(func() {
@@ -121,7 +142,10 @@ func (h *ToolHandler) handleGenerateFastScene(ctx context.Context, args map[stri
 }
 
 func (h *ToolHandler) handleChangeAtmosphere(ctx context.Context, args map[string]any) (map[string]any, error) {
-	mood, _ := args["mood"].(string)
+	mood, errResp := requireStringArg(args, "mood")
+	if errResp != nil {
+		return errResp, nil
+	}
 
 	h.emitEvent(map[string]any{
 		"type": "atmosphere_change",
@@ -133,21 +157,30 @@ func (h *ToolHandler) handleChangeAtmosphere(ctx context.Context, args map[strin
 }
 
 func (h *ToolHandler) handleRecallMemory(ctx context.Context, args map[string]any) (map[string]any, error) {
-	query, _ := args["query"].(string)
+	query, errResp := requireStringArg(args, "query")
+	if errResp != nil {
+		return errResp, nil
+	}
 
 	// TODO: T16 - Firestore memory search
 	return map[string]any{"memories": []string{}, "query": query}, nil
 }
 
 func (h *ToolHandler) handleAnalyzeUser(ctx context.Context, args map[string]any) (map[string]any, error) {
-	aspect, _ := args["aspect"].(string)
+	aspect, errResp := requireStringArg(args, "aspect")
+	if errResp != nil {
+		return errResp, nil
+	}
 
 	// TODO: T17 - Flash Vision analysis
 	return map[string]any{"observation": "user appears engaged", "aspect": aspect}, nil
 }
 
 func (h *ToolHandler) handleEndReunion(ctx context.Context, args map[string]any) (map[string]any, error) {
-	reason, _ := args["reason"].(string)
+	reason, errResp := requireStringArg(args, "reason")
+	if errResp != nil {
+		return errResp, nil
+	}
 
 	h.emitEvent(map[string]any{
 		"type":   "reunion_ending",
