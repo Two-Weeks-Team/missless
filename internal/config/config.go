@@ -37,7 +37,7 @@ func Load() (*Config, error) {
 	}
 
 	if c.Port == "" {
-		c.Port = "8080"
+		c.Port = "18080"
 	}
 	if c.Domain == "" {
 		c.Domain = "localhost"

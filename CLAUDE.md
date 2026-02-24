@@ -132,8 +132,8 @@ docker build -t missless .
 gcloud run deploy missless --source . --region asia-northeast3
 
 # Profiling (dev)
-go tool pprof http://localhost:8080/debug/pprof/heap
-go tool pprof http://localhost:8080/debug/pprof/goroutine
+go tool pprof http://localhost:18080/debug/pprof/heap
+go tool pprof http://localhost:18080/debug/pprof/goroutine
 ```
 
 ## Go Module Path
@@ -147,10 +147,10 @@ github.com/Two-Weeks-Team/missless
 See `.env.example` for all required variables. Key ones:
 - `GCP_PROJECT_ID` — GCP project
 - `GEMINI_API_KEY` — Developer API key (or use service account for Vertex AI)
-- `GOOGLE_APPLICATION_CREDENTIALS` — Service account JSON path (local dev only)
 - `YOUTUBE_CLIENT_ID` / `YOUTUBE_CLIENT_SECRET` — OAuth
 - `STORAGE_BUCKET` — Cloud Storage bucket name
-- `PORT` — Server port (default 8080)
+- `PORT` — Server port (default 18080)
+- GCP 인증은 `gcloud auth application-default login` (ADC) 사용
 
 ## Go Safety Rules (CRITICAL)
 

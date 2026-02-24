@@ -133,7 +133,7 @@ cd web && npm run build && cd ..
 go run cmd/server/main.go
 ```
 
-Open http://localhost:8080
+Open http://localhost:18080
 
 ### 4. Run Tests
 
@@ -168,7 +168,7 @@ terraform apply
 
 ```bash
 docker build -f deploy/Dockerfile -t missless .
-docker run -p 8080:8080 --env-file .env missless
+docker run -p 18080:18080 --env-file .env missless
 ```
 
 ---

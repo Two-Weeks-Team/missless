@@ -66,7 +66,7 @@ resource "google_storage_bucket" "assets" {
   uniform_bucket_level_access = true
 
   cors {
-    origin          = ["https://missless.co", "http://localhost:8080"]
+    origin          = ["https://missless.co", "http://localhost:18080"]
     method          = ["GET", "HEAD"]
     response_header = ["Content-Type"]
     max_age_seconds = 3600
