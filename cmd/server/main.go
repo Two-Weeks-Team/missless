@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Two-Weeks-Team/missless/internal/auth"
 	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/handler"
 	"github.com/Two-Weeks-Team/missless/internal/middleware"
@@ -37,9 +38,10 @@ func main() {
 
 	// HTTP mux
 	mux := http.NewServeMux()
+	sessions := auth.NewSessionStore()
 	handler.RegisterHealth(mux)
 	handler.RegisterWebSocket(mux, cfg)
-	handler.RegisterOAuth(mux, cfg)
+	handler.RegisterOAuth(mux, cfg, sessions)
 	handler.RegisterUpload(mux, cfg)
 
 	// Serve static frontend (Next.js export)
