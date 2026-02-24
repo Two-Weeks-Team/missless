@@ -163,7 +163,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 	toolHandler.SetAlbumGenerator(albumGen)
 
 	// end_reunion
-	result, err = toolHandler.Handle(ctx, "end_reunion", map[string]any{"reason": "natural_end"})
+	_, err = toolHandler.Handle(ctx, "end_reunion", map[string]any{"reason": "natural_end"})
 	if err != nil {
 		t.Fatalf("end_reunion failed: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestE2E_ErrorGracefulDegradation(t *testing.T) {
 	}
 
 	// No album generator → end_reunion still succeeds.
-	result, err = h.Handle(ctx, "end_reunion", map[string]any{"reason": "test"})
+	_, err = h.Handle(ctx, "end_reunion", map[string]any{"reason": "test"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
