@@ -31,6 +31,7 @@ FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates tzdata
 ENV TZ=Asia/Seoul
+ENV PORT=8080
 
 COPY --from=builder /server /server
 COPY --from=frontend /app/out /web/out

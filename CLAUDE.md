@@ -73,8 +73,7 @@ missless/
 ├── web/                             # Next.js 15 PWA (static export)
 ├── deploy/
 │   ├── Dockerfile
-│   ├── cloudbuild.yaml
-│   └── terraform/
+│   └── cloudbuild.yaml
 ├── plan/v7/                         # Implementation plan (8 docs)
 ├── go.mod
 └── go.sum

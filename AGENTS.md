@@ -101,11 +101,7 @@ missless/
 │   └── package.json                  # Node dependencies
 ├── deploy/                            # Infrastructure
 │   ├── Dockerfile                    # Multi-stage Go build
-│   ├── cloudbuild.yaml               # Cloud Build pipeline
-│   └── terraform/                    # IaC (Cloud Run, etc.)
-│       ├── main.tf
-│       ├── variables.tf
-│       └── outputs.tf
+│   └── cloudbuild.yaml               # Cloud Build pipeline
 ├── plan/                              # Planning documents (Korean)
 │   └── v7/                           # Latest — canonical implementation spec
 │       └── 00-INDEX.md               # Start here for plan context
@@ -129,7 +125,7 @@ missless/
 | **WS hook** | `web/hooks/useWebSocket.ts` | Client WebSocket management |
 | **Implementation plan** | `plan/v7/00-INDEX.md` | V7 spec (canonical) |
 | **Go safety rules** | `plan/v7/06-GO-SAFETY.md` | Lock ordering, SafeGo, race detector |
-| **Deploy** | `deploy/` | Dockerfile, cloudbuild.yaml, Terraform |
+| **Deploy** | `deploy/` | Dockerfile, cloudbuild.yaml |
 
 ## CONVENTIONS
 
@@ -202,7 +198,7 @@ docker run -p 18080:18080 --env-file .env missless
 | #51 | CRITICAL | Container Registry vs Artifact Registry image path mismatch |
 | #52 | CRITICAL | go.mod Go 1.24 vs CI/Dockerfile Go 1.22 version mismatch |
 | #53 | HIGH | proxy.go Close() bare goroutine — SafeGo not used |
-| #54 | HIGH | Terraform missing Artifact Registry repo + API enable |
+
 | #55 | MEDIUM | V7 anti-pattern `session.Receive(ctx)` description inaccurate |
 | #56 | MEDIUM | PRE-01~PRE-12 prerequisite tasks have no GitHub issues |
 | #57 | HIGH | Dockerfile healthcheck port (8080) vs default port (18080) mismatch |
@@ -222,5 +218,5 @@ docker run -p 18080:18080 --env-file .env missless
 
 - **Demo video > working app** — Judges may evaluate solely from video + description
 - **51 Go files** (26 source + 25 tests), **13 frontend files** (3 pages + 8 components + 2 hooks)
-- **Bonus points**: dev.to 4-post series (+0.6), cloudbuild.yaml/Terraform (+0.2), GDG membership (+0.2)
+- **Bonus points**: dev.to 4-post series (+0.6), cloudbuild.yaml (+0.2), GDG membership (+0.2)
 - **Credit deadline**: 2026-03-13 12:00 PM PT
