@@ -38,6 +38,7 @@ export default function ProgressBar({ step, percent }: ProgressBarProps) {
         }}
       >
         <div
+          data-testid="progress-fill"
           style={{
             width: `${Math.min(100, Math.max(0, percent))}%`,
             height: '100%',
