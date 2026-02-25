@@ -42,6 +42,8 @@ type Proxy struct {
 	wg            sync.WaitGroup
 	done          chan struct{}
 	sendToBrowser chan []byte
+	started       bool // guards against duplicate Run calls
+	closed        bool // guards against duplicate Close calls
 }
 
 // NewProxy creates a new proxy instance.
@@ -70,7 +72,14 @@ func (p *Proxy) SetReconnectParams(client *genai.Client, model string, config *g
 // Run starts the bidirectional proxy forwarding goroutines.
 func (p *Proxy) Run(ctx context.Context) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	if p.started || p.closed {
+		started, closed := p.started, p.closed
+		p.mu.Unlock()
+		slog.Warn("proxy_run_rejected", "started", started, "closed", closed)
+		return
+	}
+	p.started = true
+	p.mu.Unlock()
 
 	p.wg.Add(3)
 	util.SafeGo(func() {
@@ -324,14 +333,14 @@ func (p *Proxy) sendBinary(data []byte) {
 
 // Wait blocks until all proxy goroutines have exited or the shutdown timeout elapses.
 func (p *Proxy) Wait() {
-	done := make(chan struct{})
+	wgDone := make(chan struct{}, 1)
 	util.SafeGo(func() {
 		p.wg.Wait()
-		close(done)
+		close(wgDone)
 	})
 
 	select {
-	case <-done:
+	case <-wgDone:
 		slog.Info("proxy_goroutines_exited")
 	case <-time.After(shutdownTimeout):
 		slog.Warn("proxy_shutdown_timeout")
@@ -340,12 +349,17 @@ func (p *Proxy) Wait() {
 
 // Close terminates the proxy, closes the live session, and waits for goroutines.
 func (p *Proxy) Close() {
-	close(p.done)
-
 	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return
+	}
+	p.closed = true
 	old := p.liveSession
 	p.liveSession = nil
 	p.mu.Unlock()
+
+	close(p.done)
 
 	if old != nil {
 		old.Close()
