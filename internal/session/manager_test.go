@@ -28,21 +28,9 @@ func TestManager_StartOnboarding_Config(t *testing.T) {
 			cfg.SpeechConfig.VoiceConfig.PrebuiltVoiceConfig.VoiceName)
 	}
 
-	// Must have Audio + Text modalities.
-	if len(cfg.ResponseModalities) != 2 {
-		t.Fatalf("expected 2 modalities, got %d", len(cfg.ResponseModalities))
-	}
-	hasAudio, hasText := false, false
-	for _, m := range cfg.ResponseModalities {
-		if m == genai.ModalityAudio {
-			hasAudio = true
-		}
-		if m == genai.ModalityText {
-			hasText = true
-		}
-	}
-	if !hasAudio || !hasText {
-		t.Fatal("expected both AUDIO and TEXT modalities")
+	// Must have Audio-only modality (native-audio model outputs audio only).
+	if len(cfg.ResponseModalities) != 1 || cfg.ResponseModalities[0] != genai.ModalityAudio {
+		t.Fatalf("expected AUDIO-only modality, got %v", cfg.ResponseModalities)
 	}
 
 	// System instruction must mention Korean greeting.
@@ -73,10 +61,6 @@ func TestManager_StartOnboarding_Config(t *testing.T) {
 		}
 	}
 
-	// Session resumption must be configured.
-	if cfg.SessionResumption == nil {
-		t.Fatal("expected session resumption config")
-	}
 }
 
 func TestManager_Transition_StateChange(t *testing.T) {

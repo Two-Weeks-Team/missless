@@ -159,7 +159,7 @@ func (m *Manager) TransitionToReunion(ctx context.Context) error {
 // System voice: Aoede (missless host), warm guide in Korean.
 func (m *Manager) BuildOnboardingConfig() *genai.LiveConnectConfig {
 	return &genai.LiveConnectConfig{
-		ResponseModalities: []genai.Modality{genai.ModalityAudio, genai.ModalityText},
+		ResponseModalities: []genai.Modality{genai.ModalityAudio},
 		SpeechConfig: &genai.SpeechConfig{
 			VoiceConfig: &genai.VoiceConfig{
 				PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{
@@ -189,7 +189,6 @@ Keep responses concise for voice — avoid long monologues.`),
 				FunctionDeclarations: onboardingTools(),
 			},
 		},
-		SessionResumption: &genai.SessionResumptionConfig{},
 	}
 }
 
@@ -215,7 +214,7 @@ func (m *Manager) BuildReunionConfig() *genai.LiveConnectConfig {
 	targetTokens := ContextTargetTokens
 
 	return &genai.LiveConnectConfig{
-		ResponseModalities: []genai.Modality{genai.ModalityAudio, genai.ModalityText},
+		ResponseModalities: []genai.Modality{genai.ModalityAudio},
 		SpeechConfig: &genai.SpeechConfig{
 			VoiceConfig: &genai.VoiceConfig{
 				PrebuiltVoiceConfig: &genai.PrebuiltVoiceConfig{
@@ -243,7 +242,6 @@ func (m *Manager) BuildReunionConfig() *genai.LiveConnectConfig {
 				FunctionDeclarations: reunionTools(),
 			},
 		},
-		SessionResumption: &genai.SessionResumptionConfig{},
 	}
 }
 
