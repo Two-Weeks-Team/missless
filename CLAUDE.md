@@ -86,7 +86,6 @@ missless/
 | Backend | Go | 1.25+ |
 | Frontend | Next.js (PWA, static export) | 15 |
 | AI SDK | google.golang.org/genai | v1.47.0 |
-| Agent SDK | google.golang.org/adk | v0.5.0 |
 | WebSocket | gorilla/websocket | v1.5.3 |
 | Database | Cloud Firestore | v1.17.0 |
 | Storage | Cloud Storage | v1.47.0 |

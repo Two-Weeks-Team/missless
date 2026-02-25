@@ -35,7 +35,7 @@
 | 비디오 분석 모델 | `gemini-3.1-pro-preview` (미검증) | **`gemini-2.5-pro`** (GA) | 실제 모델명 검증 완료 |
 | Lyria BGM 모델 | `lyria-realtime-v1` (오류) | **`models/lyria-realtime-exp`** | 실제 모델명 확인 |
 | Go GenAI SDK | `v1.29.0` | **`v1.47.0`** (2026-02-19 릴리스) | 최신 버전 확인 |
-| ADK Go | `v0.4.0` | **`v0.5.0`** | 최신 버전 확인 |
+| ADK Go | `v0.4.0` | **미사용 (GenAI SDK만 사용)** | go.mod에 ADK 미포함 |
 | HD 프리셋 음성 | 일부만 기재 (15개) | **전체 30개 목록 + 성별/톤 특성 완비** | 공식 문서 기반 완전 목록 |
 | 보이스클로닝 | 미정 | **추후개발로 분리 (MiniMax/ElevenLabs)** | 제출본 완성 후 재판단 |
 | 제출 요구사항 | 간략 기재 | **DevPost 공식 규칙 전문 반영** | 누락 방지 |
@@ -288,7 +288,7 @@
 |-----------|---------|-----------|:---:|
 | Google Cloud 통합 | Cloud Run + Firestore + Storage + OAuth + YouTube API | 6개 Google Cloud 서비스 활용 | P1,P4 |
 | GCP 백엔드 견고성 | Go 백엔드 프록시 (SafeGo, Lock ordering, graceful shutdown) | 06-GO-SAFETY.md 전체 패턴 적용 | 전체 |
-| Agent 로직 건전성 | Sequential Agent (VideoAnalyzer→VoiceMatcher) + ADK v0.5.0 | 2단계 파이프라인 + 5개 Tool 실행 | P2,P3 |
+| Agent 로직 건전성 | Sequential Agent (VideoAnalyzer→VoiceMatcher) via GenAI SDK | 2단계 파이프라인 + 5개 Tool 실행 | P2,P3 |
 | 에러 핸들링 | retryWithBackoff + Rate Limit defense + Fallback 체계 | 모든 API 호출에 3중 방어 | P1 |
 | 할루시네이션 방지 | YouTube URL 직접 분석 기반 그라운딩 + recall_memory | 실제 영상 데이터 기반 대화 | P2,P3 |
 
@@ -370,7 +370,7 @@ missless.co는 "단일 모델의 interleaved output"이 아닌 "Live API 음성 
 - [ ] **사용한 Google 기술 명시** (제출 폼 내)
 - [ ] **서드파티 통합 선언** (gorilla/websocket, Next.js 등 — 제출 설명에 명시)
 - [ ] Gemini 모델 사용 필수
-- [ ] GenAI SDK 또는 ADK 사용 필수
+- [ ] GenAI SDK 사용 필수 (google.golang.org/genai)
 - [ ] 최소 1개 Google Cloud 서비스 사용 필수
 - [ ] Google Cloud 이용약관(AUP) 준수
 
@@ -428,15 +428,14 @@ missless.co는 "단일 모델의 interleaved output"이 아닌 "Live API 음성 
 | DevPost 공식 페이지 | https://geminiliveagentchallenge.devpost.com/ |
 | DevPost 공식 규칙 | https://geminiliveagentchallenge.devpost.com/rules |
 | DevPost 리소스 | https://geminiliveagentchallenge.devpost.com/resources |
-| ADK 공식 문서 | https://google.github.io/adk-docs/ |
-| ADK Streaming 가이드 | https://google.github.io/adk-docs/streaming/ |
+| ADK 공식 문서 (참고용) | https://google.github.io/adk-docs/ |
 | Gemini Live API 문서 | https://ai.google.dev/gemini-api/docs/live |
 | Gemini Live API 가이드 | https://ai.google.dev/gemini-api/docs/live-guide |
 | Gemini TTS 음성 목록 | https://ai.google.dev/gemini-api/docs/speech-generation |
 | Way Back Home 코드랩 | https://codelabs.developers.google.com/way-back-home-level-3 |
 | Lyria (Music Gen) 문서 | https://ai.google.dev/gemini-api/docs/music-generation |
 | Go GenAI SDK | https://pkg.go.dev/google.golang.org/genai |
-| Go ADK | https://pkg.go.dev/google.golang.org/adk |
+| Go ADK (미사용, 참고용) | https://pkg.go.dev/google.golang.org/adk |
 | 크레딧 신청 마감 | 2026-03-13 12:00 PM PT |
 | Imagen 공식 문서 | https://ai.google.dev/gemini-api/docs/imagen |
 | Imagen deprecation | https://ai.google.dev/gemini-api/docs/deprecations |
