@@ -66,9 +66,7 @@ func TestBuildOnboardingConfig(t *testing.T) {
 	if cfg.SessionResumption == nil {
 		t.Fatal("expected SessionResumption config")
 	}
-	if !cfg.SessionResumption.Transparent {
-		t.Fatal("expected transparent session resumption")
-	}
+	// SessionResumption exists (Transparent removed for Developer API compatibility).
 }
 
 func TestBuildOnboardingConfig_Modalities(t *testing.T) {

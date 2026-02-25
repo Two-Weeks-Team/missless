@@ -73,9 +73,9 @@ func TestManager_StartOnboarding_Config(t *testing.T) {
 		}
 	}
 
-	// Session resumption must be transparent.
-	if cfg.SessionResumption == nil || !cfg.SessionResumption.Transparent {
-		t.Fatal("expected transparent session resumption")
+	// Session resumption must be configured.
+	if cfg.SessionResumption == nil {
+		t.Fatal("expected session resumption config")
 	}
 }
 
