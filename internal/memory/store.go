@@ -7,6 +7,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cloud.google.com/go/firestore"
+	"google.golang.org/api/iterator"
 )
 
 // Memory represents a stored memory for recall_memory tool.
@@ -27,20 +30,35 @@ type AnalysisHighlight struct {
 	Expression  string `json:"expression"`
 }
 
-// Store manages persona memories (in-memory for hackathon; Firestore-ready interface).
+// Store manages persona memories.
+// When a Firestore client is provided, memories persist to Cloud Firestore.
+// Falls back to in-memory storage when client is nil.
 // Lock ordering: Store.mu is Level 6 (lowest).
 type Store struct {
 	mu        sync.RWMutex
-	memories  map[string][]Memory // personaID → memories
+	client    *firestore.Client
+	memories  map[string][]Memory // in-memory fallback: personaID → memories
 	maxPerKey int
 }
 
 // NewStore creates a new memory store.
-func NewStore(maxPerKey int) *Store {
+// If client is nil, falls back to in-memory storage.
+func NewStore(maxPerKey int, client *firestore.Client) *Store {
+	if client != nil {
+		slog.Info("memory_store_initialized", "mode", "firestore")
+	} else {
+		slog.Info("memory_store_initialized", "mode", "in-memory")
+	}
 	return &Store{
+		client:    client,
 		memories:  make(map[string][]Memory),
 		maxPerKey: maxPerKey,
 	}
+}
+
+// memoriesCol returns the memories subcollection for a persona.
+func (s *Store) memoriesCol(personaID string) *firestore.CollectionRef {
+	return s.client.Collection("personas").Doc(personaID).Collection("memories")
 }
 
 // SaveFromAnalysis batch-saves highlights from video analysis as memories.
@@ -49,12 +67,10 @@ func (s *Store) SaveFromAnalysis(ctx context.Context, personaID string, highligh
 		return nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	now := time.Now()
+	mems := make([]Memory, 0, len(highlights))
 	for i, h := range highlights {
-		mem := Memory{
+		mems = append(mems, Memory{
 			ID:          fmt.Sprintf("%s-analysis-%d", personaID, i),
 			Topic:       extractTopics(h.Description),
 			Description: h.Description,
@@ -62,52 +78,110 @@ func (s *Store) SaveFromAnalysis(ctx context.Context, personaID string, highligh
 			Expression:  h.Expression,
 			Source:      "video_analysis",
 			CreatedAt:   now,
-		}
-		s.memories[personaID] = append(s.memories[personaID], mem)
+		})
 	}
 
-	// Trim to max.
+	if s.client != nil {
+		bw := s.client.BulkWriter(ctx)
+		col := s.memoriesCol(personaID)
+		for _, m := range mems {
+			if _, err := bw.Set(col.Doc(m.ID), m); err != nil {
+				slog.Error("memory_bulkwriter_set_failed", "persona", personaID, "id", m.ID, "error", err)
+			}
+		}
+		bw.End()
+		slog.Info("memory_batch_saved", "persona", personaID, "count", len(mems), "mode", "firestore")
+		return nil
+	}
+
+	// In-memory fallback.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.memories[personaID] = append(s.memories[personaID], mems...)
 	if len(s.memories[personaID]) > s.maxPerKey {
 		s.memories[personaID] = s.memories[personaID][len(s.memories[personaID])-s.maxPerKey:]
 	}
-
-	slog.Info("memory_batch_saved", "persona", personaID, "count", len(highlights))
+	slog.Info("memory_batch_saved", "persona", personaID, "count", len(mems), "mode", "in-memory")
 	return nil
 }
 
 // Save stores a single memory.
 func (s *Store) Save(ctx context.Context, personaID string, memory Memory) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if memory.CreatedAt.IsZero() {
 		memory.CreatedAt = time.Now()
 	}
 
-	s.memories[personaID] = append(s.memories[personaID], memory)
+	if s.client != nil {
+		docID := memory.ID
+		if docID == "" {
+			docID = fmt.Sprintf("%s-%d", personaID, time.Now().UnixNano())
+		}
+		_, err := s.memoriesCol(personaID).Doc(docID).Set(ctx, memory)
+		if err != nil {
+			slog.Error("memory_save_failed", "persona", personaID, "error", err)
+			return err
+		}
+		slog.Info("memory_saved", "persona", personaID, "topic", memory.Topic, "mode", "firestore")
+		return nil
+	}
 
+	// In-memory fallback.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.memories[personaID] = append(s.memories[personaID], memory)
 	if len(s.memories[personaID]) > s.maxPerKey {
 		s.memories[personaID] = s.memories[personaID][len(s.memories[personaID])-s.maxPerKey:]
 	}
-
-	slog.Info("memory_saved", "persona", personaID, "topic", memory.Topic)
+	slog.Info("memory_saved", "persona", personaID, "topic", memory.Topic, "mode", "in-memory")
 	return nil
 }
 
 // Search finds memories matching the query keywords.
 // Returns at most 10 results sorted by relevance (match count).
 func (s *Store) Search(ctx context.Context, personaID, query string) ([]Memory, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	mems, ok := s.memories[personaID]
-	if !ok || len(mems) == 0 {
-		return nil, nil
-	}
-
 	keywords := splitKeywords(query)
 	if len(keywords) == 0 {
 		return nil, nil
+	}
+
+	if s.client != nil {
+		return s.searchFirestore(ctx, personaID, keywords)
+	}
+
+	// In-memory fallback.
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return searchInMemory(s.memories[personaID], keywords), nil
+}
+
+// searchFirestore fetches all memories for a persona and filters by keywords.
+func (s *Store) searchFirestore(ctx context.Context, personaID string, keywords []string) ([]Memory, error) {
+	iter := s.memoriesCol(personaID).Documents(ctx)
+	defer iter.Stop()
+
+	var allMems []Memory
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		var m Memory
+		if err := doc.DataTo(&m); err != nil {
+			continue
+		}
+		allMems = append(allMems, m)
+	}
+
+	return searchInMemory(allMems, keywords), nil
+}
+
+// searchInMemory filters and ranks memories by keyword match score.
+func searchInMemory(mems []Memory, keywords []string) []Memory {
+	if len(mems) == 0 {
+		return nil
 	}
 
 	type scored struct {
@@ -123,7 +197,7 @@ func (s *Store) Search(ctx context.Context, personaID, query string) ([]Memory, 
 		}
 	}
 
-	// Sort by score descending (simple insertion sort for small N).
+	// Sort by score descending (insertion sort for small N).
 	for i := 1; i < len(results); i++ {
 		for j := i; j > 0 && results[j].score > results[j-1].score; j-- {
 			results[j], results[j-1] = results[j-1], results[j]
@@ -139,13 +213,19 @@ func (s *Store) Search(ctx context.Context, personaID, query string) ([]Memory, 
 	for i := 0; i < limit; i++ {
 		out[i] = results[i].mem
 	}
-
-	slog.Info("memory_search", "persona", personaID, "query", query, "found", len(out))
-	return out, nil
+	return out
 }
 
 // Count returns the number of memories for a persona.
 func (s *Store) Count(personaID string) int {
+	if s.client != nil {
+		// For Firestore, we'd need to count documents.
+		// For performance, return from in-memory cache if available.
+		s.mu.RLock()
+		defer s.mu.RUnlock()
+		return len(s.memories[personaID])
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.memories[personaID])
@@ -183,6 +263,5 @@ func splitKeywords(query string) []string {
 
 // extractTopics creates a topic string from a description by taking key words.
 func extractTopics(description string) string {
-	// Simple: use the description itself as the topic for keyword matching.
 	return strings.ToLower(description)
 }

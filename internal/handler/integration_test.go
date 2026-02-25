@@ -54,7 +54,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 	}
 
 	// ─── 4. Memory Store (from analysis highlights) ────
-	memStore := memory.NewStore(100)
+	memStore := memory.NewStore(100, nil)
 	highlights := []memory.AnalysisHighlight{
 		{Timestamp: "0:15", Description: "카페에서 함께 커피를 마시며 웃는 모습", Expression: "happy"},
 		{Timestamp: "1:30", Description: "공원에서 산책하며 대화하는 장면", Expression: "calm"},
@@ -188,7 +188,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 	}
 
 	// ─── 10. Session Store ─────────────────────────────
-	sessionStore := store.NewFirestoreStore("test-project")
+	sessionStore := store.NewFirestoreStore("test-project", nil)
 	sessionData := store.SessionData{
 		SessionID:    mgr.SessionID(),
 		PersonaName:  mgr.PersonaName(),

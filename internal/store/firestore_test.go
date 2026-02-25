@@ -8,7 +8,7 @@ import (
 )
 
 func TestFirestoreStore_SaveSession(t *testing.T) {
-	fs := NewFirestoreStore("test-project")
+	fs := NewFirestoreStore("test-project", nil)
 	ctx := context.Background()
 
 	data := &SessionData{
@@ -47,7 +47,7 @@ func TestFirestoreStore_SaveSession(t *testing.T) {
 }
 
 func TestFirestoreStore_GetSession_NotFound(t *testing.T) {
-	fs := NewFirestoreStore("test-project")
+	fs := NewFirestoreStore("test-project", nil)
 	ctx := context.Background()
 
 	_, err := fs.GetSession(ctx, "nonexistent-session")
@@ -60,7 +60,7 @@ func TestFirestoreStore_GetSession_NotFound(t *testing.T) {
 }
 
 func TestFirestoreStore_SaveTranscripts(t *testing.T) {
-	fs := NewFirestoreStore("test-project")
+	fs := NewFirestoreStore("test-project", nil)
 	ctx := context.Background()
 
 	// Create session first.
@@ -118,7 +118,7 @@ func TestFirestoreStore_SaveTranscripts(t *testing.T) {
 }
 
 func TestFirestoreStore_SaveTranscripts_NotFound(t *testing.T) {
-	fs := NewFirestoreStore("test-project")
+	fs := NewFirestoreStore("test-project", nil)
 	ctx := context.Background()
 
 	err := fs.SaveTranscripts(ctx, "nonexistent", []Transcript{
