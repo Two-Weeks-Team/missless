@@ -41,7 +41,18 @@ func newUpgrader(cfg *config.Config) websocket.Upgrader {
 				return true
 			}
 			origin := r.Header.Get("Origin")
-			return origin == "" || strings.HasSuffix(origin, cfg.Domain)
+			if origin == "" {
+				return true
+			}
+			// Allow configured domain (e.g. missless.co)
+			if strings.HasSuffix(origin, cfg.Domain) {
+				return true
+			}
+			// Allow same-origin (e.g. Cloud Run auto-generated URL)
+			if strings.Contains(origin, r.Host) {
+				return true
+			}
+			return false
 		},
 	}
 }

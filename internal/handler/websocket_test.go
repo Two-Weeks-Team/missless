@@ -100,6 +100,43 @@ func TestWebSocket_NoAuthRequired(t *testing.T) {
 	}
 }
 
+func TestUpgrader_OriginCheck(t *testing.T) {
+	cfg := &config.Config{
+		GeminiAPIKey: "test-key",
+		ProjectID:    "test-project",
+		Environment:  "production",
+		Domain:       "missless.co",
+	}
+	up := newUpgrader(cfg)
+
+	tests := []struct {
+		name   string
+		origin string
+		host   string
+		want   bool
+	}{
+		{"empty origin", "", "example.com", true},
+		{"custom domain", "https://missless.co", "missless.co", true},
+		{"custom subdomain", "https://www.missless.co", "www.missless.co", true},
+		{"same-origin cloud run", "https://missless-abc-du.a.run.app", "missless-abc-du.a.run.app", true},
+		{"foreign origin", "https://evil.com", "missless-abc-du.a.run.app", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/ws", nil)
+			req.Host = tt.host
+			if tt.origin != "" {
+				req.Header.Set("Origin", tt.origin)
+			}
+			got := up.CheckOrigin(req)
+			if got != tt.want {
+				t.Fatalf("CheckOrigin(%q, host=%q) = %v, want %v", tt.origin, tt.host, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestWebSocket_ConnectionLimit(t *testing.T) {
 	// Verify that ActiveWSCount starts at 0.
 	if ActiveWSCount() != 0 {
