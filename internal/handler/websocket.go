@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Two-Weeks-Team/missless/internal/auth"
 	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/live"
 	"github.com/Two-Weeks-Team/missless/internal/retry"
@@ -33,13 +34,23 @@ func newUpgrader(cfg *config.Config) websocket.Upgrader {
 }
 
 // RegisterWebSocket registers the WebSocket endpoint for browser ↔ Go proxy.
-func RegisterWebSocket(mux *http.ServeMux, cfg *config.Config) {
+func RegisterWebSocket(mux *http.ServeMux, cfg *config.Config, sessions *auth.SessionStore) {
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		handleWebSocket(w, r, cfg)
+		handleWebSocket(w, r, cfg, sessions)
 	})
 }
 
-func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config) {
+func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config, sessions *auth.SessionStore) {
+	// Authenticate before WebSocket upgrade to prevent unauthorized Gemini API usage.
+	if cfg.IsProd() {
+		userSession := sessions.GetSessionFromRequest(r)
+		if userSession == nil {
+			slog.Warn("ws_auth_rejected", "remote", r.RemoteAddr)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+	}
+
 	up := newUpgrader(cfg)
 	conn, err := up.Upgrade(w, r, nil)
 	if err != nil {
