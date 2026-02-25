@@ -170,10 +170,11 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 		saveCtx, saveCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer saveCancel()
 		sd := &store.SessionData{
-			PersonaName: mgr.PersonaName(),
-			State:       string(mgr.State()),
+			PersonaName:  mgr.PersonaName(),
+			MatchedVoice: mgr.MatchedVoice(),
+			State:        string(mgr.State()),
 		}
-		if err := sessionStore.SaveSession(saveCtx, r.RemoteAddr, sd); err != nil {
+		if err := sessionStore.SaveSession(saveCtx, mgr.SessionID(), sd); err != nil {
 			slog.Warn("session_persist_failed", "error", err)
 		}
 	}

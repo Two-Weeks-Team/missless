@@ -66,8 +66,11 @@ func main() {
 		}
 	}
 
+	// maxMemoriesPerPersona is the maximum number of memories stored per persona.
+	const maxMemoriesPerPersona = 100
+
 	sessionStore := store.NewFirestoreStore(cfg.ProjectID, firestoreClient)
-	memStore := memory.NewStore(100, firestoreClient)
+	memStore := memory.NewStore(maxMemoriesPerPersona, firestoreClient)
 
 	// HTTP mux
 	mux := http.NewServeMux()
