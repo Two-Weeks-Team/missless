@@ -29,7 +29,7 @@ export default function PrivateVideoPopup({ onClose }: PrivateVideoPopupProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <p style={{ fontSize: '1rem', color: 'var(--color-text)', marginBottom: '0.5rem' }}>
-          This video is private
+          This video is private or unlisted
         </p>
         <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)', marginBottom: '1.5rem' }}>
           Private or unlisted videos cannot be analyzed directly.

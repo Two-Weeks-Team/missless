@@ -112,18 +112,24 @@ export default function Home() {
 
   const { state, connect, send, disconnect } = useWebSocket(wsUrl, handleMessage);
 
+  // Sync body scroll-lock class with session state; cleanup on unmount.
+  useEffect(() => {
+    document.body.classList.toggle('session-active', started);
+    return () => {
+      document.body.classList.remove('session-active');
+    };
+  }, [started]);
+
   const handleStart = () => {
     initAudioContext();
     connect();
     setStarted(true);
-    document.body.classList.add('session-active');
   };
 
   const handleStop = () => {
     disconnect();
     cleanupAudio();
     setStarted(false);
-    document.body.classList.remove('session-active');
     setPreviewSrc(null);
     setFinalSrc(null);
     setTransition('idle');
