@@ -22,7 +22,7 @@ Browser (Next.js 15 PWA — pure renderer)
 Go Backend (Cloud Run)
     ├── SessionManager (state machine: onboarding → analyzing → reunion → album)
     ├── Live API Proxy (bidirectional streaming to Gemini)
-    ├── Tool Executor (5 server-side tools)
+    ├── Tool Executor (6 server-side tools)
     ├── Onboarding Pipeline (Sequential Agent: VideoAnalyzer → VoiceMatcher)
     ├── Album Generator
     └── Tool Monitor (slog)
@@ -55,7 +55,7 @@ missless/
 │   ├── session/manager.go          # SessionManager (core state machine)
 │   ├── session/state.go            # Session state definitions
 │   ├── live/proxy.go               # Live API WebSocket proxy
-│   ├── live/tools.go               # Tool handlers (5 tools)
+│   ├── live/tools.go               # Tool handlers (6 tools)
 │   ├── live/reconnect.go           # GoAway + Session Resumption
 │   ├── onboarding/pipeline.go      # Sequential Agent (VideoAnalyzer → VoiceMatcher)
 │   ├── scene/generator.go          # 2-stage image generation
@@ -165,11 +165,12 @@ All Go code must follow the patterns in `plan/v7/06-GO-SAFETY.md`. Key rules:
 9. **`context.Background()` only in**: `main()` and graceful shutdown
 10. **Cloud Run graceful shutdown**: parallel, must complete within 8 seconds (SIGTERM grace period is 10s)
 
-## Server-Side Tools (5 tools registered with Live API)
+## Server-Side Tools (6 tools registered with Live API)
 
 | Tool | Function | Description |
 |------|----------|-------------|
 | `generate_scene` | Progressive 2-stage rendering | Flash preview (1-3s) → Imagen 4 final (8-12s) |
+| `generate_story_page` | Native interleaved output | Text narration + illustration from single Gemini call |
 | `change_atmosphere` | BGM selection | Preset BGM from Cloud Storage + crossfade |
 | `recall_memory` | Firestore search | Retrieve persona memories for grounded conversation |
 | `analyze_user` | Flash Vision | Analyze user's visual/audio input |

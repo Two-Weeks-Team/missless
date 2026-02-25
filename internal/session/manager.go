@@ -395,6 +395,11 @@ Affective Dialog Rules:
 - When the user is silent or pausing, give them space before speaking
 - Mirror emotional intensity — don't be overly cheerful when they are sad
 
+Tool Usage:
+- Use generate_story_page to create illustrated story pages with narration and artwork together — perfect for capturing special reunion moments as keepsake album pages
+- Use generate_scene for quick background scene changes during conversation
+- Use change_atmosphere to match background music to the conversation mood
+
 Proactive Audio Rules:
 - Ignore background noise and self-talk (mumbling, thinking aloud)
 - Only respond when the user addresses you directly
@@ -425,6 +430,19 @@ func onboardingTools() []*genai.FunctionDeclaration {
 				Properties: map[string]*genai.Schema{
 					"prompt": {Type: genai.TypeString, Description: "Scene description prompt"},
 					"mood":   {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, etc.)"},
+				},
+				Required: []string{"prompt", "mood"},
+			},
+		},
+		{
+			Name:        "generate_story_page",
+			Description: "Generate an illustrated story page with narration text and image from a single AI call (native interleaved output). Use this to create keepsake album pages that weave text and illustrations together seamlessly.",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"prompt":     {Type: genai.TypeString, Description: "Scene description for the story page"},
+					"mood":       {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, bittersweet)"},
+					"characters": {Type: genai.TypeString, Description: "Character descriptions for the illustration"},
 				},
 				Required: []string{"prompt", "mood"},
 			},
@@ -499,6 +517,19 @@ func reunionTools() []*genai.FunctionDeclaration {
 				Properties: map[string]*genai.Schema{
 					"prompt": {Type: genai.TypeString, Description: "Scene description prompt"},
 					"mood":   {Type: genai.TypeString, Description: "Emotional mood"},
+				},
+				Required: []string{"prompt", "mood"},
+			},
+		},
+		{
+			Name:        "generate_story_page",
+			Description: "Generate an illustrated story page with text narration and image together (native interleaved output). Creates keepsake album pages with text and illustrations woven seamlessly.",
+			Parameters: &genai.Schema{
+				Type: genai.TypeObject,
+				Properties: map[string]*genai.Schema{
+					"prompt":     {Type: genai.TypeString, Description: "Scene description for the story page"},
+					"mood":       {Type: genai.TypeString, Description: "Emotional mood"},
+					"characters": {Type: genai.TypeString, Description: "Character descriptions"},
 				},
 				Required: []string{"prompt", "mood"},
 			},

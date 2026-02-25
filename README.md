@@ -37,12 +37,13 @@ Go Backend (Cloud Run)
     ├── SessionManager (state machine)
     │   └── Onboarding → Analyzing → Transitioning → Reunion → Album → Ended
     ├── Live API Proxy (bidirectional audio streaming)
-    ├── Tool Executor (5 server-side tools)
-    │   ├── generate_scene  → Progressive 2-stage image
-    │   ├── change_atmosphere → BGM crossfade
-    │   ├── recall_memory → Firestore search
-    │   ├── analyze_user → Vision analysis
-    │   └── end_reunion → Album generation
+    ├── Tool Executor (6 server-side tools)
+    │   ├── generate_scene      → Progressive 2-stage image
+    │   ├── generate_story_page → Native interleaved text+image
+    │   ├── change_atmosphere   → BGM crossfade
+    │   ├── recall_memory       → Firestore search
+    │   ├── analyze_user        → Vision analysis
+    │   └── end_reunion         → Album generation
     ├── Onboarding Pipeline (Sequential Agent)
     │   ├── Stage 1: VideoAnalyzer (YouTube URL analysis)
     │   └── Stage 2: VoiceMatcher (30 preset mapping)

@@ -275,16 +275,16 @@ func TestBuildReunionConfig_ReunionTools(t *testing.T) {
 		toolNames[fd.Name] = true
 	}
 	expected := []string{
-		"generate_scene", "generate_fast_scene", "change_atmosphere",
-		"recall_memory", "analyze_user", "end_reunion",
+		"generate_scene", "generate_fast_scene", "generate_story_page",
+		"change_atmosphere", "recall_memory", "analyze_user", "end_reunion",
 	}
 	for _, name := range expected {
 		if !toolNames[name] {
 			t.Fatalf("expected reunion tool %q", name)
 		}
 	}
-	if len(cfg.Tools[0].FunctionDeclarations) != 6 {
-		t.Fatalf("expected 6 reunion tools, got %d", len(cfg.Tools[0].FunctionDeclarations))
+	if len(cfg.Tools[0].FunctionDeclarations) != 7 {
+		t.Fatalf("expected 7 reunion tools, got %d", len(cfg.Tools[0].FunctionDeclarations))
 	}
 }
 

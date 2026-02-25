@@ -98,15 +98,17 @@ func TestToolHandler_AllTools(t *testing.T) {
 	ctx := context.Background()
 
 	tools := []struct {
-		name string
-		args map[string]any
+		name      string
+		args      map[string]any
+		expectErr bool // tools that require a generator return an error without one
 	}{
-		{"generate_scene", map[string]any{"prompt": "sunset", "mood": "warm"}},
-		{"generate_fast_scene", map[string]any{"prompt": "ocean", "mood": "calm"}},
-		{"change_atmosphere", map[string]any{"mood": "nostalgic"}},
-		{"recall_memory", map[string]any{"query": "childhood"}},
-		{"analyze_user", map[string]any{"aspect": "emotion"}},
-		{"end_reunion", map[string]any{"reason": "user_request"}},
+		{"generate_scene", map[string]any{"prompt": "sunset", "mood": "warm"}, false},
+		{"generate_fast_scene", map[string]any{"prompt": "ocean", "mood": "calm"}, false},
+		{"generate_story_page", map[string]any{"prompt": "reunion", "mood": "warm"}, true},
+		{"change_atmosphere", map[string]any{"mood": "nostalgic"}, false},
+		{"recall_memory", map[string]any{"query": "childhood"}, false},
+		{"analyze_user", map[string]any{"aspect": "emotion"}, false},
+		{"end_reunion", map[string]any{"reason": "user_request"}, false},
 	}
 
 	for _, tc := range tools {
@@ -118,7 +120,7 @@ func TestToolHandler_AllTools(t *testing.T) {
 			if result == nil {
 				t.Fatalf("%s: expected non-nil result", tc.name)
 			}
-			if _, hasErr := result["error"]; hasErr {
+			if _, hasErr := result["error"]; hasErr && !tc.expectErr {
 				t.Fatalf("%s: got error in result: %v", tc.name, result["error"])
 			}
 		})

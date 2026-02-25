@@ -141,6 +141,8 @@ func (h *ToolHandler) Handle(ctx context.Context, toolName string, args map[stri
 		return h.handleGenerateScene(ctx, args)
 	case "generate_fast_scene":
 		return h.handleGenerateFastScene(ctx, args)
+	case "generate_story_page":
+		return h.handleGenerateStoryPage(ctx, args)
 	case "change_atmosphere":
 		return h.handleChangeAtmosphere(ctx, args)
 	case "recall_memory":
@@ -216,6 +218,51 @@ func (h *ToolHandler) handleGenerateFastScene(ctx context.Context, args map[stri
 	}
 
 	return map[string]any{"status": "fast scene started", "prompt": prompt, "mood": mood}, nil
+}
+
+func (h *ToolHandler) handleGenerateStoryPage(ctx context.Context, args map[string]any) (map[string]any, error) {
+	prompt, errResp := requireStringArg(args, "prompt")
+	if errResp != nil {
+		return errResp, nil
+	}
+	mood, errResp := requireStringArg(args, "mood")
+	if errResp != nil {
+		return errResp, nil
+	}
+	characters, _ := args["characters"].(string)
+
+	gen := h.getGenerator()
+	if gen == nil {
+		return map[string]any{"error": "image generator not configured"}, nil
+	}
+
+	result, err := gen.GenerateStoryPage(ctx, prompt, mood, characters)
+	if err != nil {
+		slog.Warn("story_page_failed", "error", err)
+		return map[string]any{"error": "story page generation failed", "detail": err.Error()}, nil
+	}
+
+	// Send interleaved story_page event to the browser (text + image together).
+	h.emitEvent(map[string]any{
+		"type":      "story_page",
+		"narration": result.Text,
+		"image":     result.ImageBase64,
+	})
+
+	// Record in album with narration for the keepsake.
+	h.mu.RLock()
+	ag := h.albumGen
+	h.mu.RUnlock()
+
+	if ag != nil {
+		ag.RecordStoryPage(result.ImageBase64, prompt, result.Text)
+	}
+
+	return map[string]any{
+		"status":    "story page created",
+		"narration": result.Text,
+		"hasImage":  result.ImageBase64 != "",
+	}, nil
 }
 
 func (h *ToolHandler) handleChangeAtmosphere(ctx context.Context, args map[string]any) (map[string]any, error) {
