@@ -255,13 +255,13 @@ func (g *Generator) buildStoryPagePrompt(prompt, mood, characters string) string
 	var parts []string
 
 	parts = append(parts, "Create a story page for a virtual reunion keepsake album.")
-	parts = append(parts, fmt.Sprintf("Scene: %s", prompt))
+	parts = append(parts, fmt.Sprintf(`Scene: """%s"""`, prompt))
 
 	if mood != "" {
-		parts = append(parts, fmt.Sprintf("Mood: %s", mood))
+		parts = append(parts, fmt.Sprintf(`Mood: """%s"""`, mood))
 	}
 	if characters != "" {
-		parts = append(parts, fmt.Sprintf("Characters: %s", characters))
+		parts = append(parts, fmt.Sprintf(`Characters: """%s"""`, characters))
 	}
 
 	parts = append(parts, "Write a short, heartfelt narration (2-3 sentences) describing this reunion moment.")
@@ -303,14 +303,20 @@ func extractInterleaved(resp *genai.GenerateContentResponse) (*InterleavedResult
 		return nil, fmt.Errorf("no candidates in response")
 	}
 
+	content := resp.Candidates[0].Content
+	if content == nil {
+		return nil, fmt.Errorf("nil content in candidate")
+	}
+
 	result := &InterleavedResult{}
 	var textParts []string
 
-	for _, part := range resp.Candidates[0].Content.Parts {
+	for _, part := range content.Parts {
 		if part.Text != "" {
 			textParts = append(textParts, part.Text)
 		}
-		if part.InlineData != nil && len(part.InlineData.Data) > 0 {
+		// Keep only the first image, consistent with extractImageBase64.
+		if result.ImageBase64 == "" && part.InlineData != nil && len(part.InlineData.Data) > 0 {
 			result.ImageBase64 = base64.StdEncoding.EncodeToString(part.InlineData.Data)
 		}
 	}

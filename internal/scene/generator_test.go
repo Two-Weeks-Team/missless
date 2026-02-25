@@ -356,6 +356,19 @@ func TestExtractInterleaved_NilResponse(t *testing.T) {
 	}
 }
 
+func TestExtractInterleaved_NilContent(t *testing.T) {
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{Content: nil},
+		},
+	}
+
+	_, err := extractInterleaved(resp)
+	if err == nil {
+		t.Fatal("expected error for nil content")
+	}
+}
+
 func TestExtractInterleaved_Empty(t *testing.T) {
 	resp := &genai.GenerateContentResponse{
 		Candidates: []*genai.Candidate{
@@ -382,6 +395,11 @@ func TestBuildStoryPagePrompt(t *testing.T) {
 		if !contains(prompt, want) {
 			t.Fatalf("expected story page prompt to contain %q, got: %s", want, prompt)
 		}
+	}
+
+	// Verify prompt injection hardening: user inputs wrapped in triple-quote delimiters.
+	if !contains(prompt, `"""dinner table scene"""`) {
+		t.Fatalf("expected triple-quote delimiters around scene input, got: %s", prompt)
 	}
 }
 
