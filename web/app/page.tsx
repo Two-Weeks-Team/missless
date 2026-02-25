@@ -107,7 +107,7 @@ export default function Home() {
   }, [transition]);
 
   const wsUrl = typeof window !== 'undefined'
-    ? `ws://${window.location.hostname}:${window.location.port || '18080'}/ws`
+    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
     : '';
 
   const { state, connect, send, disconnect } = useWebSocket(wsUrl, handleMessage);
