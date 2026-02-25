@@ -19,6 +19,39 @@ provider "google" {
   region  = var.region
 }
 
+# ── Required APIs ────────────────────────────────────────────
+
+resource "google_project_service" "run" {
+  service            = "run.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "artifactregistry" {
+  service            = "artifactregistry.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "firestore" {
+  service            = "firestore.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "secretmanager" {
+  service            = "secretmanager.googleapis.com"
+  disable_on_destroy = false
+}
+
+# ── Artifact Registry ────────────────────────────────────────
+
+resource "google_artifact_registry_repository" "missless" {
+  location      = var.region
+  repository_id = "missless"
+  format        = "DOCKER"
+  description   = "Docker images for missless.co backend"
+
+  depends_on = [google_project_service.artifactregistry]
+}
+
 # ── Service Account ──────────────────────────────────────────
 
 resource "google_service_account" "backend" {
@@ -47,6 +80,12 @@ resource "google_project_iam_member" "storage_admin" {
   member  = "serviceAccount:${google_service_account.backend.email}"
 }
 
+resource "google_project_iam_member" "secret_accessor" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.backend.email}"
+}
+
 # ── Cloud Firestore ──────────────────────────────────────────
 
 resource "google_firestore_database" "default" {
@@ -54,6 +93,8 @@ resource "google_firestore_database" "default" {
   name        = "(default)"
   location_id = var.region
   type        = "FIRESTORE_NATIVE"
+
+  depends_on = [google_project_service.firestore]
 }
 
 # ── Cloud Storage ────────────────────────────────────────────
@@ -100,6 +141,8 @@ resource "google_storage_bucket_iam_member" "albums_public" {
 resource "google_cloud_run_v2_service" "missless" {
   name     = "missless"
   location = var.region
+
+  depends_on = [google_project_service.run]
 
   template {
     service_account = google_service_account.backend.email
