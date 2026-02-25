@@ -22,7 +22,7 @@ function AlbumContent() {
       scenes = parsed.filter((s) => {
         if (!s.imageUrl) return false;
         const isBase64 = /^[A-Za-z0-9+/=]+$/.test(s.imageUrl);
-        const isSafeDataUri = s.imageUrl.startsWith('data:image/');
+        const isSafeDataUri = s.imageUrl.startsWith('data:image/') && !s.imageUrl.startsWith('data:image/svg+xml');
         const isHttps = s.imageUrl.startsWith('https://');
         return isBase64 || isSafeDataUri || isHttps;
       });

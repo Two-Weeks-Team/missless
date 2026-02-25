@@ -105,11 +105,14 @@ func (ag *AlbumGenerator) CreateAlbum(ctx context.Context, summary string) (*Alb
 		}, nil
 	}
 
+	albumID := generateAlbumID()
+
 	// Upload scenes (best-effort: skip failures).
+	// Use albumID in path to prevent cross-album overwrites.
 	if uploadFn != nil {
 		safeName := sanitizePathComponent(persona)
 		for i, s := range scenes {
-			filename := fmt.Sprintf("albums/%s/scene_%d.jpg", safeName, i)
+			filename := fmt.Sprintf("albums/%s/%s/scene_%d.jpg", safeName, albumID, i)
 			url, err := uploadFn(ctx, s.ImageURL, filename)
 			if err != nil {
 				slog.Warn("album_upload_skipped", "scene", i, "error", err)
@@ -118,8 +121,6 @@ func (ag *AlbumGenerator) CreateAlbum(ctx context.Context, summary string) (*Alb
 			scenes[i].ImageURL = url
 		}
 	}
-
-	albumID := generateAlbumID()
 	album := &Album{
 		ID:        albumID,
 		Scenes:    scenes,
