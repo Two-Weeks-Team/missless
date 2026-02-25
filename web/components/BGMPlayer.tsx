@@ -36,8 +36,8 @@ export default function BGMPlayer({ bgmUrl }: BGMPlayerProps) {
     const steps = CROSSFADE_MS / 50;
     let step = 0;
 
-    next.play().catch(() => {
-      // Autoplay may be blocked; BGM is non-critical.
+    next.play().catch((e) => {
+      console.warn('BGM autoplay blocked:', e.message);
     });
 
     fadeIntervalRef.current = setInterval(() => {
