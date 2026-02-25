@@ -2,6 +2,7 @@
 # missless — CI Pipeline
 # Go: vet, staticcheck, race-detected tests, build
 # Frontend: type-check, lint, build (Next.js static export)
+# Path filter: skip unrelated jobs on PRs (push to main runs all)
 # ============================================================
 
 name: CI
@@ -17,8 +18,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'web/**'
+              - '.github/workflows/ci.yml'
+
   go-ci:
     name: Go CI
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -50,6 +76,8 @@ jobs:
 
   frontend-ci:
     name: Frontend CI
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
