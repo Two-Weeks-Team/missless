@@ -48,8 +48,10 @@ func main() {
 	fs := http.FileServer(http.Dir("web/out"))
 	mux.Handle("/", fs)
 
-	// Apply middleware
-	h := middleware.Recovery(middleware.Logging(mux))
+	// Apply middleware (outermost runs first)
+	// Rate limit: 10 req/s per IP, burst 20 — applies to all endpoints
+	limiter := middleware.NewIPRateLimiter(10, 20)
+	h := middleware.Recovery(middleware.Logging(middleware.RateLimit(limiter)(mux)))
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),
