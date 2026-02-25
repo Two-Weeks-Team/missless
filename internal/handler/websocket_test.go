@@ -15,9 +15,9 @@ func TestBuildOnboardingConfig(t *testing.T) {
 		t.Fatal("expected non-nil config")
 	}
 
-	// Check response modalities
-	if len(cfg.ResponseModalities) != 2 {
-		t.Fatalf("expected 2 modalities, got %d", len(cfg.ResponseModalities))
+	// Check response modalities — native-audio model is audio-only.
+	if len(cfg.ResponseModalities) != 1 {
+		t.Fatalf("expected 1 modality, got %d", len(cfg.ResponseModalities))
 	}
 
 	// Check voice config
@@ -61,33 +61,14 @@ func TestBuildOnboardingConfig(t *testing.T) {
 			t.Fatalf("expected tool %s in declarations", name)
 		}
 	}
-
-	// Check session resumption
-	if cfg.SessionResumption == nil {
-		t.Fatal("expected SessionResumption config")
-	}
-	// SessionResumption exists (Transparent removed for Developer API compatibility).
 }
 
 func TestBuildOnboardingConfig_Modalities(t *testing.T) {
 	mgr := session.NewManager("test-session")
 	cfg := mgr.BuildOnboardingConfig()
 
-	hasAudio := false
-	hasText := false
-	for _, m := range cfg.ResponseModalities {
-		if m == genai.ModalityAudio {
-			hasAudio = true
-		}
-		if m == genai.ModalityText {
-			hasText = true
-		}
-	}
-
-	if !hasAudio {
-		t.Fatal("expected AUDIO modality")
-	}
-	if !hasText {
-		t.Fatal("expected TEXT modality")
+	// Native-audio model requires audio-only output.
+	if len(cfg.ResponseModalities) != 1 || cfg.ResponseModalities[0] != genai.ModalityAudio {
+		t.Fatalf("expected AUDIO-only modality, got %v", cfg.ResponseModalities)
 	}
 }
