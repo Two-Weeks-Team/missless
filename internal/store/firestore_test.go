@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 )
@@ -126,5 +128,261 @@ func TestFirestoreStore_SaveTranscripts_NotFound(t *testing.T) {
 	}, false)
 	if !errors.Is(err, ErrSessionNotFound) {
 		t.Fatalf("expected ErrSessionNotFound, got: %v", err)
+	}
+}
+
+func TestFirestoreStore_SaveSession_Overwrite(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	ctx := context.Background()
+
+	data1 := &SessionData{PersonaName: "Original", MatchedVoice: "voice1"}
+	if err := store.SaveSession(ctx, "s1", data1); err != nil {
+		t.Fatalf("SaveSession (original) failed: %v", err)
+	}
+
+	data2 := &SessionData{PersonaName: "Updated", MatchedVoice: "voice2"}
+	if err := store.SaveSession(ctx, "s1", data2); err != nil {
+		t.Fatalf("SaveSession (updated) failed: %v", err)
+	}
+
+	got, err := store.GetSession(ctx, "s1")
+	if err != nil {
+		t.Fatalf("GetSession failed: %v", err)
+	}
+	if got.PersonaName != "Updated" {
+		t.Errorf("expected Updated, got %s", got.PersonaName)
+	}
+	if got.MatchedVoice != "voice2" {
+		t.Errorf("expected voice2, got %s", got.MatchedVoice)
+	}
+}
+
+func TestFirestoreStore_SaveSession_SetsTimestamps(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	ctx := context.Background()
+
+	data := &SessionData{PersonaName: "Test"}
+	if err := store.SaveSession(ctx, "s1", data); err != nil {
+		t.Fatalf("SaveSession failed: %v", err)
+	}
+
+	got, err := store.GetSession(ctx, "s1")
+	if err != nil {
+		t.Fatalf("GetSession failed: %v", err)
+	}
+	if got.CreatedAt.IsZero() {
+		t.Error("CreatedAt should be set")
+	}
+	if got.UpdatedAt.IsZero() {
+		t.Error("UpdatedAt should be set")
+	}
+	if got.SessionID != "s1" {
+		t.Errorf("SessionID should be set to s1, got %s", got.SessionID)
+	}
+}
+
+func TestFirestoreStore_SaveSession_PreservesCreatedAt(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	ctx := context.Background()
+
+	// First save sets CreatedAt.
+	data := &SessionData{PersonaName: "Test"}
+	if err := store.SaveSession(ctx, "s1", data); err != nil {
+		t.Fatalf("SaveSession (first) failed: %v", err)
+	}
+	got1, err := store.GetSession(ctx, "s1")
+	if err != nil {
+		t.Fatalf("GetSession (first) failed: %v", err)
+	}
+	createdAt := got1.CreatedAt
+
+	// Small delay to ensure timestamps differ.
+	time.Sleep(time.Millisecond)
+
+	// Second save should preserve the original CreatedAt.
+	data2 := &SessionData{PersonaName: "Test2", CreatedAt: createdAt}
+	if err := store.SaveSession(ctx, "s1", data2); err != nil {
+		t.Fatalf("SaveSession (second) failed: %v", err)
+	}
+	got2, err := store.GetSession(ctx, "s1")
+	if err != nil {
+		t.Fatalf("GetSession (second) failed: %v", err)
+	}
+
+	if !got2.CreatedAt.Equal(createdAt) {
+		t.Errorf("CreatedAt should be preserved, got %v, want %v", got2.CreatedAt, createdAt)
+	}
+	if !got2.UpdatedAt.After(createdAt) {
+		t.Error("UpdatedAt should be after CreatedAt on second save")
+	}
+}
+
+func TestFirestoreStore_SaveTranscripts_Multiple(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	ctx := context.Background()
+
+	if err := store.SaveSession(ctx, "s1", &SessionData{PersonaName: "Test"}); err != nil {
+		t.Fatalf("SaveSession failed: %v", err)
+	}
+
+	batch1 := []Transcript{{Role: "user", Text: "hello"}}
+	if err := store.SaveTranscripts(ctx, "s1", batch1, false); err != nil {
+		t.Fatalf("SaveTranscripts (batch1) failed: %v", err)
+	}
+
+	batch2 := []Transcript{{Role: "model", Text: "hi"}, {Role: "user", Text: "bye"}}
+	if err := store.SaveTranscripts(ctx, "s1", batch2, true); err != nil {
+		t.Fatalf("SaveTranscripts (batch2) failed: %v", err)
+	}
+
+	got, err := store.GetSession(ctx, "s1")
+	if err != nil {
+		t.Fatalf("GetSession failed: %v", err)
+	}
+	if len(got.Transcripts) != 3 {
+		t.Errorf("expected 3 transcripts, got %d", len(got.Transcripts))
+	}
+	if got.ReunionCount != 1 {
+		t.Errorf("expected reunion count 1, got %d", got.ReunionCount)
+	}
+}
+
+func TestFirestoreStore_SaveTranscripts_UpdatesTimestamp(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	ctx := context.Background()
+
+	if err := store.SaveSession(ctx, "s1", &SessionData{PersonaName: "Test"}); err != nil {
+		t.Fatalf("SaveSession failed: %v", err)
+	}
+	got1, err := store.GetSession(ctx, "s1")
+	if err != nil {
+		t.Fatalf("GetSession (first) failed: %v", err)
+	}
+	firstUpdate := got1.UpdatedAt
+
+	time.Sleep(time.Millisecond)
+
+	if err := store.SaveTranscripts(ctx, "s1", []Transcript{{Role: "user", Text: "hi"}}, false); err != nil {
+		t.Fatalf("SaveTranscripts failed: %v", err)
+	}
+	got2, err := store.GetSession(ctx, "s1")
+	if err != nil {
+		t.Fatalf("GetSession (second) failed: %v", err)
+	}
+
+	if !got2.UpdatedAt.After(firstUpdate) {
+		t.Error("UpdatedAt should advance after SaveTranscripts")
+	}
+}
+
+func TestFirestoreStore_Close_NilClient(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	err := store.Close()
+	if err != nil {
+		t.Errorf("Close with nil client should not error, got %v", err)
+	}
+}
+
+func TestFirestoreStore_Flush(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	// Flush is a no-op but should not panic.
+	store.Flush(context.Background())
+}
+
+func TestFirestoreStore_ConcurrentAccess(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	ctx := context.Background()
+	var wg sync.WaitGroup
+
+	// Concurrent saves to different sessions.
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sid := fmt.Sprintf("session-%d", idx)
+			if err := store.SaveSession(ctx, sid, &SessionData{
+				PersonaName: fmt.Sprintf("persona-%d", idx),
+			}); err != nil {
+				t.Errorf("SaveSession failed for %s: %v", sid, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Concurrent reads.
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sid := fmt.Sprintf("session-%d", idx)
+			if _, err := store.GetSession(ctx, sid); err != nil {
+				t.Errorf("GetSession failed for %s: %v", sid, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestFirestoreStore_ConcurrentMixed(t *testing.T) {
+	store := NewFirestoreStore("test", nil)
+	ctx := context.Background()
+
+	// Pre-create sessions.
+	for i := 0; i < 5; i++ {
+		if err := store.SaveSession(ctx, fmt.Sprintf("s%d", i), &SessionData{
+			PersonaName: fmt.Sprintf("p%d", i),
+		}); err != nil {
+			t.Fatalf("SaveSession setup failed for s%d: %v", i, err)
+		}
+	}
+
+	var wg sync.WaitGroup
+
+	// Concurrent save transcripts + get sessions.
+	for i := 0; i < 30; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sid := fmt.Sprintf("s%d", idx%5)
+			if idx%2 == 0 {
+				if err := store.SaveTranscripts(ctx, sid, []Transcript{
+					{Role: "user", Text: fmt.Sprintf("msg-%d", idx)},
+				}, idx%3 == 0); err != nil {
+					t.Errorf("SaveTranscripts failed for %s at idx %d: %v", sid, idx, err)
+				}
+			} else {
+				if _, err := store.GetSession(ctx, sid); err != nil {
+					t.Errorf("GetSession failed for %s at idx %d: %v", sid, idx, err)
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestToInterfaceSlice(t *testing.T) {
+	transcripts := []Transcript{
+		{Role: "user", Text: "hello"},
+		{Role: "model", Text: "hi"},
+	}
+	result := toInterfaceSlice(transcripts)
+	if len(result) != 2 {
+		t.Errorf("expected 2, got %d", len(result))
+	}
+	// Verify types.
+	for _, r := range result {
+		if _, ok := r.(Transcript); !ok {
+			t.Errorf("expected Transcript type, got %T", r)
+		}
+	}
+}
+
+func TestToInterfaceSlice_Empty(t *testing.T) {
+	result := toInterfaceSlice(nil)
+	if len(result) != 0 {
+		t.Errorf("expected 0 for nil input, got %d", len(result))
 	}
 }
