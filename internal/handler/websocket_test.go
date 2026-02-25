@@ -77,7 +77,9 @@ func TestBuildOnboardingConfig_Modalities(t *testing.T) {
 	}
 }
 
-func TestWebSocket_AuthRequired_Prod(t *testing.T) {
+func TestWebSocket_NoAuthRequired(t *testing.T) {
+	// WebSocket does NOT require session auth because the onboarding flow
+	// connects before OAuth login. Protection is via origin check + rate limit + connection limit.
 	sessions := auth.NewSessionStore()
 	cfg := &config.Config{
 		GeminiAPIKey: "test-key",
@@ -89,32 +91,12 @@ func TestWebSocket_AuthRequired_Prod(t *testing.T) {
 	req := httptest.NewRequest("GET", "/ws", nil)
 	rec := httptest.NewRecorder()
 
-	handleWebSocket(rec, req, cfg, sessions)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for unauthenticated prod request, got %d", rec.Code)
-	}
-}
-
-func TestWebSocket_AuthSkipped_Dev(t *testing.T) {
-	sessions := auth.NewSessionStore()
-	cfg := &config.Config{
-		GeminiAPIKey: "test-key",
-		ProjectID:    "test-project",
-		Environment:  "development",
-		Domain:       "localhost",
-	}
-
-	req := httptest.NewRequest("GET", "/ws", nil)
-	rec := httptest.NewRecorder()
-
-	// In dev mode, auth is not required. The handler will proceed past auth
-	// and fail at WebSocket upgrade (since this isn't a real WS request),
-	// but it should NOT return 401.
+	// Should NOT return 401 — proceeds to WebSocket upgrade (which fails in test
+	// since this isn't a real WS request, but the point is no auth rejection).
 	handleWebSocket(rec, req, cfg, sessions)
 
 	if rec.Code == http.StatusUnauthorized {
-		t.Fatal("dev mode should not require authentication")
+		t.Fatal("WebSocket should not require session authentication")
 	}
 }
 
