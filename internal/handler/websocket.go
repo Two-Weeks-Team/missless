@@ -54,15 +54,9 @@ func RegisterWebSocket(mux *http.ServeMux, cfg *config.Config, sessions *auth.Se
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config, sessions *auth.SessionStore) {
-	// Authenticate before WebSocket upgrade to prevent unauthorized Gemini API usage.
-	if cfg.IsProd() {
-		userSession := sessions.GetSessionFromRequest(r)
-		if userSession == nil {
-			slog.Warn("ws_auth_rejected", "remote", r.RemoteAddr)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-	}
+	// Protection: Origin check (in upgrader) + rate limiter + connection limit.
+	// Session auth is NOT required here because the onboarding flow connects
+	// the WebSocket before the user completes OAuth login.
 
 	// Application-level connection limit to prevent resource exhaustion.
 	if activeWSConns.Load() >= maxConcurrentWS {
