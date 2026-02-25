@@ -274,6 +274,8 @@ func (p *Proxy) handleServerContent(content *genai.LiveServerContent) {
 				p.sendBinary(part.InlineData.Data)
 			}
 			if part.Text != "" {
+				// Capture transcript for analyze_user context.
+				p.toolHandler.AddTranscript("model", part.Text)
 				// Forward transcript as JSON
 				p.sendJSON(map[string]any{
 					"type": "transcript",

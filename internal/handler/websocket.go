@@ -113,6 +113,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 	sceneGen := scene.NewGenerator(client)
 	toolHandler := live.NewToolHandler()
 	toolHandler.SetGenerator(sceneGen)
+	toolHandler.SetGenaiClient(client)
 
 	// Connect to Live API with onboarding config and retry
 	liveConfig := mgr.BuildOnboardingConfig()

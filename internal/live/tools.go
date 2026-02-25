@@ -4,12 +4,26 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Two-Weeks-Team/missless/internal/memory"
 	"github.com/Two-Weeks-Team/missless/internal/scene"
+	"google.golang.org/genai"
 )
+
+// maxTranscriptBuffer is the maximum number of recent transcript entries to keep.
+const maxTranscriptBuffer = 30
+
+// transcriptEntry stores a single conversation turn.
+type transcriptEntry struct {
+	Role string
+	Text string
+}
+
+// analysisModel is the Gemini model used for user analysis.
+const analysisModel = "gemini-2.5-flash"
 
 // ToolHandler executes server-side tools called by the Live API.
 // Lock ordering: ToolHandler.mu is Level 3.
@@ -26,6 +40,10 @@ type ToolHandler struct {
 	memoryStore *memory.Store
 	// personaID is the current persona identifier for memory lookups.
 	personaID string
+	// genaiClient is used for Flash-based user analysis.
+	genaiClient *genai.Client
+	// transcripts stores recent conversation turns for analysis context.
+	transcripts []transcriptEntry
 }
 
 // NewToolHandler creates a new tool handler.
@@ -53,6 +71,40 @@ func (h *ToolHandler) SetMemoryStore(store *memory.Store, personaID string) {
 	defer h.mu.Unlock()
 	h.memoryStore = store
 	h.personaID = personaID
+}
+
+// SetGenaiClient sets the genai client for Flash-based analysis.
+func (h *ToolHandler) SetGenaiClient(client *genai.Client) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.genaiClient = client
+}
+
+// AddTranscript appends a conversation turn to the buffer (capped at maxTranscriptBuffer).
+func (h *ToolHandler) AddTranscript(role, text string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.transcripts = append(h.transcripts, transcriptEntry{Role: role, Text: text})
+	if len(h.transcripts) > maxTranscriptBuffer {
+		h.transcripts = h.transcripts[len(h.transcripts)-maxTranscriptBuffer:]
+	}
+}
+
+// getTranscriptContext returns the recent transcript as a formatted string.
+func (h *ToolHandler) getTranscriptContext() string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if len(h.transcripts) == 0 {
+		return "(no conversation yet)"
+	}
+	var sb strings.Builder
+	for _, t := range h.transcripts {
+		sb.WriteString(t.Role)
+		sb.WriteString(": ")
+		sb.WriteString(t.Text)
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 // getGenerator returns the current generator under lock.
@@ -222,7 +274,46 @@ func (h *ToolHandler) handleAnalyzeUser(ctx context.Context, args map[string]any
 		return errResp, nil
 	}
 
-	return map[string]any{"observation": "user appears engaged", "aspect": aspect}, nil
+	h.mu.RLock()
+	client := h.genaiClient
+	h.mu.RUnlock()
+
+	if client == nil {
+		slog.Warn("analyze_user_no_client", "aspect", aspect)
+		return map[string]any{"observation": "unable to analyze — client not configured", "aspect": aspect}, nil
+	}
+
+	transcript := h.getTranscriptContext()
+	prompt := fmt.Sprintf(`Analyze the following conversation and provide a brief observation about the user's %s.
+
+Recent conversation:
+%s
+
+Respond with ONLY a JSON object (no markdown, no code fences):
+{"observation": "<one sentence observation about user's %s>", "confidence": "<low|medium|high>", "suggestion": "<one sentence suggestion for how to respond>"}`, aspect, transcript, aspect)
+
+	analysisCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	resp, err := client.Models.GenerateContent(analysisCtx, analysisModel, []*genai.Content{
+		genai.NewContentFromText(prompt, "user"),
+	}, nil)
+	if err != nil {
+		slog.Warn("analyze_user_flash_error", "error", err, "aspect", aspect)
+		return map[string]any{"observation": "analysis temporarily unavailable", "aspect": aspect}, nil
+	}
+
+	// Extract text from response.
+	if resp != nil && len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if part.Text != "" {
+				slog.Info("analyze_user_result", "aspect", aspect, "result", part.Text)
+				return map[string]any{"analysis": part.Text, "aspect": aspect}, nil
+			}
+		}
+	}
+
+	return map[string]any{"observation": "no analysis available", "aspect": aspect}, nil
 }
 
 func (h *ToolHandler) handleEndReunion(ctx context.Context, args map[string]any) (map[string]any, error) {
