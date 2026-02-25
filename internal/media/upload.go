@@ -5,27 +5,47 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+
+	"cloud.google.com/go/storage"
 )
 
 // Uploader handles gallery fallback uploads to Cloud Storage.
 type Uploader struct {
 	bucket string
-	// TODO: T08 - Add storage.Client field
+	client *storage.Client
 }
 
-// NewUploader creates a new uploader.
-func NewUploader(bucket string) *Uploader {
-	return &Uploader{bucket: bucket}
+// NewUploader creates a new uploader with a Cloud Storage client.
+// If client is nil, uploads will return an error.
+func NewUploader(bucket string, client *storage.Client) *Uploader {
+	return &Uploader{bucket: bucket, client: client}
 }
 
-// Upload stores a video/image in Cloud Storage and returns the URL.
+// Upload stores a video/image in Cloud Storage and returns the gs:// URI for Gemini analysis.
 func (u *Uploader) Upload(ctx context.Context, filename string, reader io.Reader, contentType string) (string, error) {
-	slog.Info("upload_start", "filename", filename, "bucket", u.bucket)
+	if u.client == nil {
+		return "", fmt.Errorf("storage client not initialized")
+	}
+	if u.bucket == "" {
+		return "", fmt.Errorf("storage bucket not configured")
+	}
 
-	// TODO: T08 - Upload to Cloud Storage (uploads/ prefix)
-	// 1. Create object writer
-	// 2. Copy reader → writer
-	// 3. Return gs:// URL for Gemini analysis
+	objectPath := "uploads/" + filename
+	slog.Info("upload_start", "filename", filename, "bucket", u.bucket, "object", objectPath)
 
-	return "", fmt.Errorf("not yet implemented")
+	obj := u.client.Bucket(u.bucket).Object(objectPath)
+	w := obj.NewWriter(ctx)
+	w.ContentType = contentType
+
+	if _, err := io.Copy(w, reader); err != nil {
+		w.Close()
+		return "", fmt.Errorf("copy to storage: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return "", fmt.Errorf("close storage writer: %w", err)
+	}
+
+	gsURI := fmt.Sprintf("gs://%s/%s", u.bucket, objectPath)
+	slog.Info("upload_complete", "uri", gsURI, "content_type", contentType)
+	return gsURI, nil
 }

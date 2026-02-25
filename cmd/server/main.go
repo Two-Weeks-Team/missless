@@ -11,9 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/Two-Weeks-Team/missless/internal/auth"
 	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/handler"
+	"github.com/Two-Weeks-Team/missless/internal/media"
 	"github.com/Two-Weeks-Team/missless/internal/middleware"
 	"github.com/Two-Weeks-Team/missless/internal/util"
 )
@@ -36,13 +38,26 @@ func main() {
 		syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// Cloud Storage client for uploads (optional — nil if unavailable)
+	var storageClient *storage.Client
+	if cfg.StorageBucket != "" {
+		sc, err := storage.NewClient(ctx)
+		if err != nil {
+			slog.Warn("storage_client_init_failed", "error", err)
+		} else {
+			storageClient = sc
+			defer sc.Close()
+		}
+	}
+	uploader := media.NewUploader(cfg.StorageBucket, storageClient)
+
 	// HTTP mux
 	mux := http.NewServeMux()
 	sessions := auth.NewSessionStore()
 	handler.RegisterHealth(mux)
 	handler.RegisterWebSocket(mux, cfg, sessions)
 	handler.RegisterOAuth(mux, cfg, sessions)
-	handler.RegisterUpload(mux, cfg)
+	handler.RegisterUpload(mux, uploader)
 
 	// Serve static frontend (Next.js export)
 	fs := http.FileServer(http.Dir("web/out"))
