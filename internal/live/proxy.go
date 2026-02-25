@@ -325,10 +325,10 @@ func (p *Proxy) sendBinary(data []byte) {
 // Wait blocks until all proxy goroutines have exited or the shutdown timeout elapses.
 func (p *Proxy) Wait() {
 	done := make(chan struct{})
-	go func() {
+	util.SafeGo(func() {
 		p.wg.Wait()
 		close(done)
-	}()
+	})
 
 	select {
 	case <-done:
