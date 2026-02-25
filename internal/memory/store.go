@@ -82,15 +82,14 @@ func (s *Store) SaveFromAnalysis(ctx context.Context, personaID string, highligh
 	}
 
 	if s.client != nil {
-		batch := s.client.Batch()
+		bw := s.client.BulkWriter(ctx)
 		col := s.memoriesCol(personaID)
 		for _, m := range mems {
-			batch.Set(col.Doc(m.ID), m)
+			if _, err := bw.Set(col.Doc(m.ID), m); err != nil {
+				slog.Error("memory_bulkwriter_set_failed", "persona", personaID, "id", m.ID, "error", err)
+			}
 		}
-		if _, err := batch.Commit(ctx); err != nil {
-			slog.Error("memory_batch_save_failed", "persona", personaID, "error", err)
-			return err
-		}
+		bw.End()
 		slog.Info("memory_batch_saved", "persona", personaID, "count", len(mems), "mode", "firestore")
 		return nil
 	}
