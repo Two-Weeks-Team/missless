@@ -17,7 +17,7 @@ import (
 )
 
 // LiveModel is the Gemini model used for the Live API connection.
-const LiveModel = "gemini-2.5-flash-native-audio"
+const LiveModel = "gemini-2.5-flash-native-audio-preview-12-2025"
 
 // newUpgrader creates a WebSocket upgrader with origin checking based on environment.
 func newUpgrader(cfg *config.Config) websocket.Upgrader {
