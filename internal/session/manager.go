@@ -435,19 +435,6 @@ func onboardingTools() []*genai.FunctionDeclaration {
 			},
 		},
 		{
-			Name:        "generate_story_page",
-			Description: "Generate an illustrated story page with narration text and image from a single AI call (native interleaved output). Use this to create keepsake album pages that weave text and illustrations together seamlessly.",
-			Parameters: &genai.Schema{
-				Type: genai.TypeObject,
-				Properties: map[string]*genai.Schema{
-					"prompt":     {Type: genai.TypeString, Description: "Scene description for the story page"},
-					"mood":       {Type: genai.TypeString, Description: "Emotional mood (warm, nostalgic, joyful, bittersweet)"},
-					"characters": {Type: genai.TypeString, Description: "Character descriptions for the illustration"},
-				},
-				Required: []string{"prompt", "mood"},
-			},
-		},
-		{
 			Name:        "change_atmosphere",
 			Description: "Change the background music to match the conversation mood",
 			Parameters: &genai.Schema{

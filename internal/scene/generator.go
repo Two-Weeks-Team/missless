@@ -255,13 +255,13 @@ func (g *Generator) buildStoryPagePrompt(prompt, mood, characters string) string
 	var parts []string
 
 	parts = append(parts, "Create a story page for a virtual reunion keepsake album.")
-	parts = append(parts, fmt.Sprintf(`Scene: """%s"""`, prompt))
+	parts = append(parts, fmt.Sprintf(`Scene: """%s"""`, sanitizeDelimiters(prompt)))
 
 	if mood != "" {
-		parts = append(parts, fmt.Sprintf(`Mood: """%s"""`, mood))
+		parts = append(parts, fmt.Sprintf(`Mood: """%s"""`, sanitizeDelimiters(mood)))
 	}
 	if characters != "" {
-		parts = append(parts, fmt.Sprintf(`Characters: """%s"""`, characters))
+		parts = append(parts, fmt.Sprintf(`Characters: """%s"""`, sanitizeDelimiters(characters)))
 	}
 
 	parts = append(parts, "Write a short, heartfelt narration (2-3 sentences) describing this reunion moment.")
@@ -278,7 +278,13 @@ func (g *Generator) buildStoryPagePrompt(prompt, mood, characters string) string
 		}
 	}
 
-	return strings.Join(parts, " ")
+	return strings.Join(parts, ". ")
+}
+
+// sanitizeDelimiters strips triple-quote sequences from user input to prevent
+// delimiter breakout in structured prompts.
+func sanitizeDelimiters(s string) string {
+	return strings.ReplaceAll(s, `"""`, ``)
 }
 
 // extractImageBase64 extracts the first image from a GenerateContentResponse as base64.
