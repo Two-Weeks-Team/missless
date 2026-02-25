@@ -11,12 +11,15 @@ import (
 	"syscall"
 	"time"
 
+	"cloud.google.com/go/firestore"
 	"cloud.google.com/go/storage"
 	"github.com/Two-Weeks-Team/missless/internal/auth"
 	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/handler"
 	"github.com/Two-Weeks-Team/missless/internal/media"
+	"github.com/Two-Weeks-Team/missless/internal/memory"
 	"github.com/Two-Weeks-Team/missless/internal/middleware"
+	"github.com/Two-Weeks-Team/missless/internal/store"
 	"github.com/Two-Weeks-Team/missless/internal/util"
 )
 
@@ -51,11 +54,26 @@ func main() {
 	}
 	uploader := media.NewUploader(cfg.StorageBucket, storageClient)
 
+	// Firestore client (optional — nil if unavailable)
+	var firestoreClient *firestore.Client
+	if cfg.ProjectID != "" {
+		fc, err := firestore.NewClientWithDatabase(ctx, cfg.ProjectID, cfg.FirestoreDB)
+		if err != nil {
+			slog.Warn("firestore_client_init_failed", "error", err)
+		} else {
+			firestoreClient = fc
+			defer fc.Close()
+		}
+	}
+
+	sessionStore := store.NewFirestoreStore(cfg.ProjectID, firestoreClient)
+	memStore := memory.NewStore(100, firestoreClient)
+
 	// HTTP mux
 	mux := http.NewServeMux()
 	sessions := auth.NewSessionStore()
 	handler.RegisterHealth(mux)
-	handler.RegisterWebSocket(mux, cfg, sessions)
+	handler.RegisterWebSocket(mux, cfg, sessions, sessionStore, memStore)
 	handler.RegisterOAuth(mux, cfg, sessions)
 	handler.RegisterUpload(mux, uploader)
 

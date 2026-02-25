@@ -11,9 +11,11 @@ import (
 	"github.com/Two-Weeks-Team/missless/internal/auth"
 	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/live"
+	"github.com/Two-Weeks-Team/missless/internal/memory"
 	"github.com/Two-Weeks-Team/missless/internal/retry"
 	"github.com/Two-Weeks-Team/missless/internal/scene"
 	"github.com/Two-Weeks-Team/missless/internal/session"
+	"github.com/Two-Weeks-Team/missless/internal/store"
 	"github.com/gorilla/websocket"
 	"google.golang.org/genai"
 )
@@ -58,13 +60,13 @@ func newUpgrader(cfg *config.Config) websocket.Upgrader {
 }
 
 // RegisterWebSocket registers the WebSocket endpoint for browser ↔ Go proxy.
-func RegisterWebSocket(mux *http.ServeMux, cfg *config.Config, sessions *auth.SessionStore) {
+func RegisterWebSocket(mux *http.ServeMux, cfg *config.Config, sessions *auth.SessionStore, sessionStore *store.FirestoreStore, memStore *memory.Store) {
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		handleWebSocket(w, r, cfg, sessions)
+		handleWebSocket(w, r, cfg, sessions, sessionStore, memStore)
 	})
 }
 
-func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config, sessions *auth.SessionStore) {
+func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config, sessions *auth.SessionStore, sessionStore *store.FirestoreStore, memStore *memory.Store) {
 	// Protection: Origin check (in upgrader) + rate limiter + connection limit.
 	// Session auth is NOT required here because the onboarding flow connects
 	// the WebSocket before the user completes OAuth login.
@@ -87,7 +89,12 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 	activeWSConns.Add(1)
 	defer activeWSConns.Add(-1)
 
-	slog.Info("websocket_connected", "remote", r.RemoteAddr, "active_ws", activeWSConns.Load())
+	slog.Info("websocket_connected",
+		"remote", r.RemoteAddr,
+		"active_ws", activeWSConns.Load(),
+		"has_session_store", sessionStore != nil,
+		"has_memory_store", memStore != nil,
+	)
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -114,6 +121,9 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 	toolHandler := live.NewToolHandler()
 	toolHandler.SetGenerator(sceneGen)
 	toolHandler.SetGenaiClient(client)
+	if memStore != nil {
+		toolHandler.SetMemoryStore(memStore, "")
+	}
 
 	// Connect to Live API with onboarding config and retry
 	liveConfig := mgr.BuildOnboardingConfig()
@@ -154,6 +164,19 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 
 	cancel()
 	proxy.Close()
+
+	// Persist session state to Firestore on disconnect.
+	if sessionStore != nil {
+		saveCtx, saveCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer saveCancel()
+		sd := &store.SessionData{
+			PersonaName: mgr.PersonaName(),
+			State:       string(mgr.State()),
+		}
+		if err := sessionStore.SaveSession(saveCtx, r.RemoteAddr, sd); err != nil {
+			slog.Warn("session_persist_failed", "error", err)
+		}
+	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
