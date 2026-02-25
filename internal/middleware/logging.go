@@ -38,10 +38,10 @@ func Logging(next http.Handler) http.Handler {
 		next.ServeHTTP(rw, r)
 
 		if rw.hijacked {
-			slog.Info("ws_upgraded",
+			slog.Info("ws_session",
 				"method", r.Method,
 				"path", r.URL.Path,
-				"duration_ms", time.Since(start).Milliseconds(),
+				"session_duration_ms", time.Since(start).Milliseconds(),
 				"remote", r.RemoteAddr,
 			)
 			return
