@@ -76,6 +76,11 @@ export default function OnboardingFlow({
           >
             분석할 인물을 선택하세요
           </h2>
+          <style>{`
+            .person-crop-btn:hover {
+              border-color: var(--color-primary) !important;
+            }
+          `}</style>
           <div
             style={{
               display: 'flex',
@@ -86,7 +91,8 @@ export default function OnboardingFlow({
           >
             {personCrops.map((crop, i) => (
               <button
-                key={i}
+                key={crop}
+                className="person-crop-btn"
                 onClick={() => onSelectPerson(i)}
                 style={{
                   width: 100,
@@ -98,12 +104,6 @@ export default function OnboardingFlow({
                   padding: 0,
                   background: 'var(--color-surface)',
                   transition: 'border-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-primary)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'transparent';
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -17,11 +17,16 @@ export default function SceneDisplay({ previewSrc, finalSrc }: SceneDisplayProps
     const img = finalRef.current;
     if (!finalSrc || !img) return;
 
-    const handleLoad = () => setShowFinal(true);
+    let mounted = true;
+
+    const handleLoad = () => {
+      if (mounted) setShowFinal(true);
+    };
     img.addEventListener('load', handleLoad);
     img.src = finalSrc;
 
     return () => {
+      mounted = false;
       img.removeEventListener('load', handleLoad);
     };
   }, [finalSrc]);
