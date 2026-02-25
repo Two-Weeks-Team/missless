@@ -35,7 +35,7 @@ func (p *Proxy) Reconnect(ctx context.Context, client *genai.Client, model strin
 	// Shallow copy config to avoid mutating the caller's original.
 	cfg := *config
 	if token != "" {
-		resumption := &genai.SessionResumptionConfig{Transparent: true}
+		resumption := &genai.SessionResumptionConfig{}
 		if config.SessionResumption != nil {
 			*resumption = *config.SessionResumption
 		}

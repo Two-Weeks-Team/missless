@@ -189,9 +189,7 @@ Keep responses concise for voice — avoid long monologues.`),
 				FunctionDeclarations: onboardingTools(),
 			},
 		},
-		SessionResumption: &genai.SessionResumptionConfig{
-			Transparent: true,
-		},
+		SessionResumption: &genai.SessionResumptionConfig{},
 	}
 }
 
@@ -245,9 +243,7 @@ func (m *Manager) BuildReunionConfig() *genai.LiveConnectConfig {
 				FunctionDeclarations: reunionTools(),
 			},
 		},
-		SessionResumption: &genai.SessionResumptionConfig{
-			Transparent: true,
-		},
+		SessionResumption: &genai.SessionResumptionConfig{},
 	}
 }
 
