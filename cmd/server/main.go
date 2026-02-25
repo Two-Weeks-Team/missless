@@ -60,12 +60,12 @@ func main() {
 	}
 
 	// Start server
-	go func() {
+	util.SafeGo(func() {
 		slog.Info("server started", "port", cfg.Port)
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 		}
-	}()
+	})
 
 	// Wait for shutdown signal
 	<-ctx.Done()
