@@ -43,12 +43,6 @@ Thumbs.db
 # Logs
 *.log
 
-# Terraform
-deploy/terraform/.terraform/
-deploy/terraform/.terraform.lock.hcl
-deploy/terraform/terraform.tfstate
-deploy/terraform/terraform.tfstate.backup
-*.tfvars
 
 # Debug
 __debug_bin*

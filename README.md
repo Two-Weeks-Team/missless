@@ -69,8 +69,7 @@ Google Cloud Services
 | **Database** | Cloud Firestore | v1.17.0 |
 | **Storage** | Cloud Storage | v1.47.0 |
 | **Auth** | golang.org/x/oauth2 | v0.25.0 |
-| **Deploy** | Google Cloud Run | asia-northeast3 |
-| **IaC** | Terraform + Cloud Build | — |
+| **Deploy** | Cloud Run + Cloud Build | asia-northeast3 |
 
 ### AI Models
 
@@ -155,15 +154,6 @@ cd web && npm run lint && npx tsc --noEmit
 gcloud builds submit --config deploy/cloudbuild.yaml
 ```
 
-### Terraform
-
-```bash
-cd deploy/terraform
-terraform init
-terraform plan -var="project_id=YOUR_PROJECT" -var="gemini_api_key=YOUR_KEY"
-terraform apply
-```
-
 ### Docker (Manual)
 
 ```bash
@@ -195,8 +185,7 @@ missless/
 ├── web/                         # Next.js 15 PWA
 ├── deploy/
 │   ├── Dockerfile               # Multi-stage build
-│   ├── cloudbuild.yaml          # Cloud Build pipeline
-│   └── terraform/               # Infrastructure as Code
+│   └── cloudbuild.yaml          # Cloud Build pipeline
 ├── plan/v7/                     # Implementation specs
 └── .github/workflows/ci.yml    # GitHub Actions CI
 ```
