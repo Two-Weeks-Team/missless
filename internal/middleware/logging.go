@@ -12,6 +12,7 @@ import (
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
+	hijacked   bool
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -22,6 +23,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 // Hijack implements http.Hijacker so WebSocket upgrades work through this middleware.
 func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if hj, ok := rw.ResponseWriter.(http.Hijacker); ok {
+		rw.hijacked = true
 		return hj.Hijack()
 	}
 	return nil, nil, fmt.Errorf("underlying ResponseWriter does not implement http.Hijacker")
@@ -34,6 +36,16 @@ func Logging(next http.Handler) http.Handler {
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
 		next.ServeHTTP(rw, r)
+
+		if rw.hijacked {
+			slog.Info("ws_session",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"session_duration_ms", time.Since(start).Milliseconds(),
+				"remote", r.RemoteAddr,
+			)
+			return
+		}
 
 		slog.Info("http_request",
 			"method", r.Method,
