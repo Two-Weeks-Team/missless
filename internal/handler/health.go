@@ -20,5 +20,6 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status":     "ok",
 		"uptime":     time.Since(startTime).String(),
 		"goroutines": runtime.NumGoroutine(),
+		"active_ws":  ActiveWSCount(),
 	})
 }
