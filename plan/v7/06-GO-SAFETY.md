@@ -2,7 +2,7 @@
 
 > missless.co V7 | Go 백엔드 안전성 가이드
 > 대상: WebSocket 프록시 + Gemini Live API + 동시성 이미지 생성 + Firestore
-> Go 1.22 + google.golang.org/genai v1.47.0 + ADK v0.5.0
+> Go 1.22 + google.golang.org/genai v1.47.0
 
 ---
 
