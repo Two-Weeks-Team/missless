@@ -7,7 +7,12 @@ This directory contains the template and instructions for generating daily devlo
 1. Copy `DAILY_DEVLOG_TEMPLATE.md` to a new file (e.g., `2026-02-25.md`).
 2. Run the commands below to collect your activity from the last 24 hours.
 3. Fill in the narrative and other sections.
-4. Post to dev.to!
+4. Post to dev.to! (See [DEVTO_UPLOAD.md](DEVTO_UPLOAD.md) for automated workflow)
+
+## Contents
+
+- [DAILY_DEVLOG_TEMPLATE.md](DAILY_DEVLOG_TEMPLATE.md): Template for daily devlogs.
+- [DEVTO_UPLOAD.md](DEVTO_UPLOAD.md): Workflow for uploading devlogs to dev.to using a Claude skill.
 
 ## Activity Collection Commands
 
