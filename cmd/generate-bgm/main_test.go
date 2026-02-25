@@ -337,7 +337,10 @@ func TestWeightedPrompt_Roundtrip(t *testing.T) {
 
 func TestWeightedPrompt_JSONTags(t *testing.T) {
 	p := weightedPrompt{Text: "hello", Weight: 1.0}
-	data, _ := json.Marshal(p)
+	data, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
 
 	var parsed map[string]interface{}
 	if err := json.Unmarshal(data, &parsed); err != nil {
@@ -385,6 +388,9 @@ func TestWSEndpoint(t *testing.T) {
 		t.Fatal("wsEndpoint should not be empty")
 	}
 	// Must use secure WebSocket.
+	if len(wsEndpoint) < 4 {
+		t.Fatalf("wsEndpoint too short to contain scheme: %q", wsEndpoint)
+	}
 	if wsEndpoint[:4] != "wss:" {
 		t.Errorf("wsEndpoint should use wss:// scheme, got: %s", wsEndpoint)
 	}
