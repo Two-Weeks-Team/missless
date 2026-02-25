@@ -93,7 +93,7 @@ func TestWebSocket_NoAuthRequired(t *testing.T) {
 
 	// Should NOT return 401 — proceeds to WebSocket upgrade (which fails in test
 	// since this isn't a real WS request, but the point is no auth rejection).
-	handleWebSocket(rec, req, cfg, sessions)
+	handleWebSocket(rec, req, cfg, sessions, nil, nil)
 
 	if rec.Code == http.StatusUnauthorized {
 		t.Fatal("WebSocket should not require session authentication")
@@ -158,7 +158,7 @@ func TestWebSocket_ConnectionLimit(t *testing.T) {
 	req := httptest.NewRequest("GET", "/ws", nil)
 	rec := httptest.NewRecorder()
 
-	handleWebSocket(rec, req, cfg, sessions)
+	handleWebSocket(rec, req, cfg, sessions, nil, nil)
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 at connection limit, got %d", rec.Code)
