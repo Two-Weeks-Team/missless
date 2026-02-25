@@ -133,6 +133,16 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 	proxy.SetReconnectParams(client, LiveModel, liveConfig)
 	proxy.Run(ctx)
 
+	// Send initial greeting trigger so the model speaks first.
+	err = liveSession.SendClientContent(genai.LiveClientContentInput{
+		Turns: []*genai.Content{
+			genai.NewContentFromText("(사용자가 방금 접속했습니다. 따뜻하게 인사해주세요.)", "user"),
+		},
+	})
+	if err != nil {
+		slog.Error("initial_greeting_failed", "error", err)
+	}
+
 	slog.Info("session_started",
 		"remote", r.RemoteAddr,
 		"state", string(mgr.State()),
