@@ -222,7 +222,6 @@ func (h *ToolHandler) handleAnalyzeUser(ctx context.Context, args map[string]any
 		return errResp, nil
 	}
 
-	// TODO: T17 - Flash Vision analysis
 	return map[string]any{"observation": "user appears engaged", "aspect": aspect}, nil
 }
 

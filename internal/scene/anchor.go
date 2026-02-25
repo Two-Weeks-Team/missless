@@ -1,6 +1,8 @@
 package scene
 
 import (
+	"net/http"
+	"strings"
 	"sync"
 
 	"google.golang.org/genai"
@@ -78,9 +80,13 @@ func (a *CharacterAnchor) GetRefParts() []*genai.Part {
 
 	parts := make([]*genai.Part, 0, len(a.RefImages))
 	for _, img := range a.RefImages {
+		mime := http.DetectContentType(img)
+		if !strings.HasPrefix(mime, "image/") {
+			mime = "image/jpeg"
+		}
 		parts = append(parts, &genai.Part{
 			InlineData: &genai.Blob{
-				MIMEType: "image/jpeg",
+				MIMEType: mime,
 				Data:     img,
 			},
 		})
