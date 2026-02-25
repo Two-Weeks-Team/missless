@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -387,4 +389,120 @@ func TestGenerateState_Unique(t *testing.T) {
 	if state1 == state2 {
 		t.Error("two consecutive GenerateState calls should produce different values")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Concurrency safety tests (race detector validation)
+// ---------------------------------------------------------------------------
+
+func TestSessionStore_ConcurrentCreateAndGet(t *testing.T) {
+	store := NewSessionStore()
+	const goroutines = 50
+
+	var wg sync.WaitGroup
+	ids := make([]string, goroutines)
+	errs := make([]error, goroutines)
+
+	// Concurrently create sessions.
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			token := &oauth2.Token{AccessToken: fmt.Sprintf("tok_%d", idx)}
+			id, err := store.CreateSession(token)
+			ids[idx] = id
+			errs[idx] = err
+		}(i)
+	}
+	wg.Wait()
+
+	// Verify all sessions were created successfully.
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("goroutine %d: CreateSession error: %v", i, err)
+		}
+	}
+
+	// Concurrently read sessions.
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sess := store.GetSession(ids[idx])
+			if sess == nil {
+				t.Errorf("goroutine %d: GetSession returned nil for valid ID", idx)
+				return
+			}
+			expected := fmt.Sprintf("tok_%d", idx)
+			if sess.GetToken().AccessToken != expected {
+				t.Errorf("goroutine %d: expected %q, got %q", idx, expected, sess.GetToken().AccessToken)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+func TestSessionStore_ConcurrentStateValidation(t *testing.T) {
+	store := NewSessionStore()
+	const goroutines = 50
+
+	// Store unique states.
+	states := make([]string, goroutines)
+	for i := 0; i < goroutines; i++ {
+		states[i] = fmt.Sprintf("state_%d", i)
+		store.StoreState(states[i])
+	}
+
+	// Concurrently validate states (each should succeed exactly once).
+	results := make([]bool, goroutines)
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			results[idx] = store.ValidateState(states[idx])
+		}(i)
+	}
+	wg.Wait()
+
+	for i, ok := range results {
+		if !ok {
+			t.Errorf("goroutine %d: ValidateState returned false for valid state", i)
+		}
+	}
+
+	// Verify one-time use: second attempt should all fail.
+	for i := 0; i < goroutines; i++ {
+		if store.ValidateState(states[i]) {
+			t.Errorf("state %d: ValidateState succeeded on second call (should be one-time)", i)
+		}
+	}
+}
+
+func TestSessionStore_ConcurrentMixedOperations(t *testing.T) {
+	store := NewSessionStore()
+	const goroutines = 30
+
+	var wg sync.WaitGroup
+
+	// Mix of CreateSession, GetSession, StoreState, and ValidateState.
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			token := &oauth2.Token{AccessToken: fmt.Sprintf("mixed_%d", idx)}
+			id, err := store.CreateSession(token)
+			if err != nil {
+				t.Errorf("goroutine %d: CreateSession error: %v", idx, err)
+				return
+			}
+			_ = store.GetSession(id)
+			_ = store.GetSession("nonexistent")
+
+			state := fmt.Sprintf("mixed_state_%d", idx)
+			store.StoreState(state)
+			_ = store.ValidateState(state)
+		}(i)
+	}
+	wg.Wait()
 }
