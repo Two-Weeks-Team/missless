@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import OnboardingFlow from '../../components/OnboardingFlow';
 import type { YouTubeVideo } from '../../components/YouTubeGrid';
@@ -18,7 +18,7 @@ const sampleCrops = [
   'https://example.com/crop2.jpg',
 ];
 
-const defaultProps = {
+const makeDefaultProps = () => ({
   stage: 'welcome' as const,
   videos: sampleVideos,
   personCrops: sampleCrops,
@@ -27,7 +27,13 @@ const defaultProps = {
   analysisPercent: 30,
   onSelectVideo: vi.fn(),
   onSelectPerson: vi.fn(),
-};
+});
+
+let defaultProps: ReturnType<typeof makeDefaultProps>;
+
+beforeEach(() => {
+  defaultProps = makeDefaultProps();
+});
 
 describe('OnboardingFlow', () => {
   it('renders YouTubeGrid when stage is youtube_grid', () => {

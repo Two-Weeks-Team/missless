@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAudio } from '../../hooks/useAudio';
 
@@ -57,6 +57,10 @@ beforeEach(() => {
   };
 
   vi.stubGlobal('AudioContext', MockAudioContext);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------------------
@@ -211,13 +215,12 @@ describe('useAudio', () => {
     expect(mockClose).toHaveBeenCalledTimes(1);
 
     // After cleanup, playPCM should be a no-op (ref is null)
-    const prevContext = latestContext!;
-    vi.clearAllMocks();
+    mockStart.mockClear();
     const pcm = new ArrayBuffer(4);
     act(() => {
       result.current.playPCM(pcm);
     });
-    expect(prevContext.createBuffer).not.toHaveBeenCalled();
+    expect(mockStart).not.toHaveBeenCalled();
   });
 
   // 7b. cleanup is safe to call without initialization -------------------------

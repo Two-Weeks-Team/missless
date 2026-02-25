@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import type { ServerMessage } from '../../hooks/useWebSocket';
@@ -57,6 +57,10 @@ let instances: MockWebSocket[] = [];
 beforeEach(() => {
   instances = [];
   vi.stubGlobal('WebSocket', MockWebSocket);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------------------
@@ -282,7 +286,9 @@ describe('useWebSocket', () => {
       instances[0].simulateOpen();
     });
 
-    unmount();
+    act(() => {
+      unmount();
+    });
 
     expect(instances[0].close).toHaveBeenCalled();
   });
