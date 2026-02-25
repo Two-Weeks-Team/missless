@@ -116,12 +116,14 @@ export default function Home() {
     initAudioContext();
     connect();
     setStarted(true);
+    document.body.classList.add('session-active');
   };
 
   const handleStop = () => {
     disconnect();
     cleanupAudio();
     setStarted(false);
+    document.body.classList.remove('session-active');
     setPreviewSrc(null);
     setFinalSrc(null);
     setTransition('idle');
@@ -149,34 +151,190 @@ export default function Home() {
     return (
       <main
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100dvh',
-          textAlign: 'center',
-          padding: '2rem',
+          minHeight: '100dvh',
+          overflowY: 'auto',
+          background: 'var(--color-bg)',
         }}
       >
-        <h1 style={{ fontSize: '3rem', marginBottom: '1rem' }}>missless</h1>
-        <p style={{ fontSize: '1.25rem', color: 'var(--color-muted)', maxWidth: '400px' }}>
-          그리운 사람과의 가상 재회
-        </p>
-        <button
-          onClick={handleStart}
+        {/* Hero Section */}
+        <section
           style={{
-            marginTop: '2rem',
-            padding: '1rem 2.5rem',
-            fontSize: '1.125rem',
-            background: 'var(--color-primary)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '2rem',
-            cursor: 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100dvh',
+            textAlign: 'center',
+            padding: '2rem',
           }}
         >
-          시작하기
-        </button>
+          <h1 style={{ fontSize: 'clamp(2.5rem, 6vw, 4rem)', marginBottom: '1rem', fontWeight: 700 }}>
+            missless
+          </h1>
+          <p style={{ fontSize: 'clamp(1rem, 2.5vw, 1.25rem)', color: 'var(--color-muted)', maxWidth: '480px', lineHeight: 1.6 }}>
+            A virtual reunion with someone you miss.
+            <br />
+            Powered by AI voice, real-time scenes, and shared memories.
+          </p>
+          <button
+            onClick={handleStart}
+            aria-label="Begin your virtual reunion"
+            style={{
+              marginTop: '2.5rem',
+              padding: '1rem 3rem',
+              fontSize: '1.125rem',
+              background: 'var(--color-primary)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '2rem',
+              cursor: 'pointer',
+              transition: 'opacity 0.2s',
+            }}
+          >
+            Begin Reunion
+          </button>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginTop: '1rem', opacity: 0.7 }}>
+            Gemini Live Agent Challenge 2026 &middot; Creative Storyteller
+          </p>
+        </section>
+
+        {/* Features Section */}
+        <section
+          style={{
+            padding: '4rem 2rem',
+            maxWidth: '900px',
+            margin: '0 auto',
+          }}
+        >
+          <h2 style={{ fontSize: '1.5rem', textAlign: 'center', marginBottom: '3rem', fontWeight: 600 }}>
+            How It Works
+          </h2>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '2rem',
+            }}
+          >
+            {[
+              {
+                step: '1',
+                title: 'Share a Video',
+                desc: 'Paste a YouTube link of the person you miss. We analyze their voice, expressions, and personality.',
+              },
+              {
+                step: '2',
+                title: 'AI Builds a Persona',
+                desc: 'Our AI creates a realistic voice persona with matched speech patterns, memories, and emotions.',
+              },
+              {
+                step: '3',
+                title: 'Live Voice Reunion',
+                desc: 'Have a real-time voice conversation. AI generates scenes and background music as you talk.',
+              },
+            ].map((f) => (
+              <div
+                key={f.step}
+                style={{
+                  background: 'var(--color-surface)',
+                  borderRadius: '1rem',
+                  padding: '1.5rem',
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: '50%',
+                    background: 'var(--color-primary)',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    margin: '0 auto 1rem',
+                  }}
+                >
+                  {f.step}
+                </div>
+                <h3 style={{ fontSize: '1.125rem', marginBottom: '0.5rem', fontWeight: 600 }}>
+                  {f.title}
+                </h3>
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)', lineHeight: 1.5, margin: 0 }}>
+                  {f.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Highlights Section */}
+        <section
+          style={{
+            padding: '3rem 2rem 4rem',
+            maxWidth: '700px',
+            margin: '0 auto',
+            textAlign: 'center',
+          }}
+        >
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '2rem', fontWeight: 600 }}>
+            Key Features
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', textAlign: 'left' }}>
+            {[
+              { label: 'Voice Reunion', detail: 'Real-time AI voice conversation with personality-matched personas' },
+              { label: 'Scene Generation', detail: 'Progressive image generation — flash preview in seconds, high-quality final render' },
+              { label: 'Memory Album', detail: 'Save and share reunion moments as a beautiful photo album' },
+              { label: 'Background Music', detail: 'AI-selected atmospheric music that matches the mood of your conversation' },
+            ].map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  alignItems: 'baseline',
+                }}
+              >
+                <span style={{ color: 'var(--color-primary)', fontWeight: 600, minWidth: '160px', fontSize: '0.9375rem' }}>
+                  {item.label}
+                </span>
+                <span style={{ color: 'var(--color-muted)', fontSize: '0.875rem', lineHeight: 1.5 }}>
+                  {item.detail}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Bottom CTA */}
+        <section
+          style={{
+            padding: '3rem 2rem 5rem',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ fontSize: '1.125rem', color: 'var(--color-text)', marginBottom: '1.5rem' }}>
+            Ready to reconnect?
+          </p>
+          <button
+            onClick={handleStart}
+            aria-label="Start your virtual reunion"
+            style={{
+              padding: '1rem 3rem',
+              fontSize: '1.125rem',
+              background: 'var(--color-primary)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '2rem',
+              cursor: 'pointer',
+              transition: 'opacity 0.2s',
+            }}
+          >
+            Start Now
+          </button>
+        </section>
       </main>
     );
   }
@@ -262,7 +420,7 @@ export default function Home() {
           zIndex: 10,
         }}
       >
-        종료
+        End Session
       </button>
     </main>
   );

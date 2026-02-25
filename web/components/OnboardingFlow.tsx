@@ -74,7 +74,7 @@ export default function OnboardingFlow({
               color: 'var(--color-text)',
             }}
           >
-            분석할 인물을 선택하세요
+            Select the person to analyze
           </h2>
           <div
             style={{
