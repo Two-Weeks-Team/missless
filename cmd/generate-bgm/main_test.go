@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -388,10 +389,7 @@ func TestWSEndpoint(t *testing.T) {
 		t.Fatal("wsEndpoint should not be empty")
 	}
 	// Must use secure WebSocket.
-	if len(wsEndpoint) < 4 {
-		t.Fatalf("wsEndpoint too short to contain scheme: %q", wsEndpoint)
-	}
-	if wsEndpoint[:4] != "wss:" {
+	if !strings.HasPrefix(wsEndpoint, "wss:") {
 		t.Errorf("wsEndpoint should use wss:// scheme, got: %s", wsEndpoint)
 	}
 }
