@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import ServiceWorkerRegistrar from '../components/ServiceWorkerRegistrar';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -39,17 +40,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js').catch(() => {});
-                });
-              }
-            `,
-          }}
-        />
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

@@ -15,22 +15,21 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: clean old caches and claim clients
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // Fetch: network-first with cache fallback for navigation, cache-first for static assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Skip non-GET and WebSocket requests
-  if (request.method !== 'GET' || request.url.includes('/ws')) {
+  // Skip non-GET requests
+  if (request.method !== 'GET') {
     return;
   }
 
