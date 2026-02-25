@@ -76,11 +76,6 @@ export default function OnboardingFlow({
           >
             분석할 인물을 선택하세요
           </h2>
-          <style>{`
-            .person-crop-btn:hover {
-              border-color: var(--color-primary) !important;
-            }
-          `}</style>
           <div
             style={{
               display: 'flex',
