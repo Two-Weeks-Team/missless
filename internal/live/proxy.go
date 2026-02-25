@@ -73,8 +73,9 @@ func (p *Proxy) SetReconnectParams(client *genai.Client, model string, config *g
 func (p *Proxy) Run(ctx context.Context) {
 	p.mu.Lock()
 	if p.started || p.closed {
+		started, closed := p.started, p.closed
 		p.mu.Unlock()
-		slog.Warn("proxy_run_rejected", "started", p.started, "closed", p.closed)
+		slog.Warn("proxy_run_rejected", "started", started, "closed", closed)
 		return
 	}
 	p.started = true
@@ -332,14 +333,14 @@ func (p *Proxy) sendBinary(data []byte) {
 
 // Wait blocks until all proxy goroutines have exited or the shutdown timeout elapses.
 func (p *Proxy) Wait() {
-	done := make(chan struct{}, 1)
+	wgDone := make(chan struct{}, 1)
 	util.SafeGo(func() {
 		p.wg.Wait()
-		close(done)
+		close(wgDone)
 	})
 
 	select {
-	case <-done:
+	case <-wgDone:
 		slog.Info("proxy_goroutines_exited")
 	case <-time.After(shutdownTimeout):
 		slog.Warn("proxy_shutdown_timeout")
