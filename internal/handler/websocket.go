@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Two-Weeks-Team/missless/internal/auth"
@@ -19,6 +20,18 @@ import (
 
 // LiveModel is the Gemini model used for the Live API connection.
 const LiveModel = "gemini-2.5-flash-native-audio-preview-12-2025"
+
+// maxConcurrentWS is the application-level limit for simultaneous WebSocket sessions.
+// Each session holds a genai client + Live API session + goroutines, so this must stay low.
+const maxConcurrentWS = 20
+
+// activeWSConns tracks the number of active WebSocket connections.
+var activeWSConns atomic.Int64
+
+// ActiveWSCount returns the current number of active WebSocket connections (for testing/monitoring).
+func ActiveWSCount() int64 {
+	return activeWSConns.Load()
+}
 
 // newUpgrader creates a WebSocket upgrader with origin checking based on environment.
 func newUpgrader(cfg *config.Config) websocket.Upgrader {
@@ -51,6 +64,13 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 		}
 	}
 
+	// Application-level connection limit to prevent resource exhaustion.
+	if activeWSConns.Load() >= maxConcurrentWS {
+		slog.Warn("ws_connection_limit", "active", activeWSConns.Load(), "max", maxConcurrentWS)
+		http.Error(w, "Service Busy", http.StatusServiceUnavailable)
+		return
+	}
+
 	up := newUpgrader(cfg)
 	conn, err := up.Upgrade(w, r, nil)
 	if err != nil {
@@ -59,7 +79,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 	}
 	defer conn.Close()
 
-	slog.Info("websocket_connected", "remote", r.RemoteAddr)
+	activeWSConns.Add(1)
+	defer activeWSConns.Add(-1)
+
+	slog.Info("websocket_connected", "remote", r.RemoteAddr, "active_ws", activeWSConns.Load())
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()

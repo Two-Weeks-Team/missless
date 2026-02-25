@@ -117,3 +117,31 @@ func TestWebSocket_AuthSkipped_Dev(t *testing.T) {
 		t.Fatal("dev mode should not require authentication")
 	}
 }
+
+func TestWebSocket_ConnectionLimit(t *testing.T) {
+	// Verify that ActiveWSCount starts at 0.
+	if ActiveWSCount() != 0 {
+		t.Fatalf("expected 0 active connections, got %d", ActiveWSCount())
+	}
+
+	// Simulate reaching the limit by manually setting the counter.
+	activeWSConns.Store(maxConcurrentWS)
+	defer activeWSConns.Store(0)
+
+	sessions := auth.NewSessionStore()
+	cfg := &config.Config{
+		GeminiAPIKey: "test-key",
+		ProjectID:    "test-project",
+		Environment:  "development",
+		Domain:       "localhost",
+	}
+
+	req := httptest.NewRequest("GET", "/ws", nil)
+	rec := httptest.NewRecorder()
+
+	handleWebSocket(rec, req, cfg, sessions)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 at connection limit, got %d", rec.Code)
+	}
+}
