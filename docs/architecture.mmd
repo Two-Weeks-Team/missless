@@ -1,0 +1,55 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4285F4', 'primaryTextColor': '#fff', 'primaryBorderColor': '#3367D6', 'lineColor': '#5F6368', 'secondaryColor': '#34A853', 'tertiaryColor': '#FBBC04'}}}%%
+flowchart LR
+    subgraph Browser["Browser — Next.js 15 PWA"]
+        direction TB
+        UI["Voice UI\n+ Scene Display\n(Pure Renderer)"]
+    end
+
+    subgraph Backend["Go Backend — Cloud Run"]
+        direction TB
+        WS["WebSocket\nHandler"]
+        SM["Session\nManager"]
+        LP["Live API\nProxy"]
+        TE["Tool Executor"]
+        OP["Onboarding\nPipeline"]
+
+        WS --- SM
+        SM --- LP
+        LP --- TE
+        OP -.->|persona| SM
+    end
+
+    subgraph Gemini["Gemini API — 4 Models"]
+        direction TB
+        LIVE["Live API\nNative Audio"]
+        PRO["2.5 Pro\nVideo Analysis"]
+        FLASH["2.5 Flash\nImage (1-3s)"]
+        IMAGEN["Imagen 4\nHD (8-12s)"]
+    end
+
+    subgraph Cloud["Google Cloud Services"]
+        direction TB
+        FS[("Firestore\nSessions\nMemories")]
+        CS[("Storage\nBGM + Assets")]
+        YT["YouTube\nData API"]
+    end
+
+    UI <-->|"WebSocket\nPCM Audio + Events"| WS
+    LP <-->|"Bidi\nStreaming"| LIVE
+    TE -->|generate_scene| FLASH
+    TE -->|generate_scene| IMAGEN
+    TE -->|recall_memory| FS
+    TE -->|change_atmosphere| CS
+    OP -->|analyze video| PRO
+    OP -->|fetch metadata| YT
+    TE -->|end_reunion| CS
+
+    classDef browser fill:#E8F0FE,stroke:#4285F4,color:#1A73E8
+    classDef backend fill:#E6F4EA,stroke:#34A853,color:#137333
+    classDef gemini fill:#FCE8E6,stroke:#EA4335,color:#C5221F
+    classDef cloud fill:#F3E8FD,stroke:#A142F4,color:#7627BB
+
+    class Browser browser
+    class Backend backend
+    class Gemini gemini
+    class Cloud cloud
