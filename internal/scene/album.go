@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -105,8 +107,9 @@ func (ag *AlbumGenerator) CreateAlbum(ctx context.Context, summary string) (*Alb
 
 	// Upload scenes (best-effort: skip failures).
 	if uploadFn != nil {
+		safeName := sanitizePathComponent(persona)
 		for i, s := range scenes {
-			filename := fmt.Sprintf("albums/%s/scene_%d.jpg", persona, i)
+			filename := fmt.Sprintf("albums/%s/scene_%d.jpg", safeName, i)
 			url, err := uploadFn(ctx, s.ImageURL, filename)
 			if err != nil {
 				slog.Warn("album_upload_skipped", "scene", i, "error", err)
@@ -128,6 +131,19 @@ func (ag *AlbumGenerator) CreateAlbum(ctx context.Context, summary string) (*Alb
 
 	slog.Info("album_created", "id", albumID, "scenes", len(scenes), "persona", persona)
 	return album, nil
+}
+
+// sanitizePathComponent strips directory traversal from a user-supplied name,
+// keeping only the base filename and replacing path separators.
+func sanitizePathComponent(name string) string {
+	name = filepath.Base(name)
+	name = strings.ReplaceAll(name, "..", "")
+	name = strings.ReplaceAll(name, "/", "_")
+	name = strings.ReplaceAll(name, "\\", "_")
+	if name == "" || name == "." {
+		name = "unknown"
+	}
+	return name
 }
 
 // generateAlbumID creates a random 8-byte hex album ID.

@@ -18,7 +18,14 @@ function AlbumContent() {
   let scenes: AlbumScene[] = [];
   if (scenesParam) {
     try {
-      scenes = JSON.parse(decodeURIComponent(scenesParam));
+      const parsed: AlbumScene[] = JSON.parse(decodeURIComponent(scenesParam));
+      scenes = parsed.filter((s) => {
+        if (!s.imageUrl) return false;
+        const isBase64 = /^[A-Za-z0-9+/=]+$/.test(s.imageUrl);
+        const isSafeDataUri = s.imageUrl.startsWith('data:image/');
+        const isHttps = s.imageUrl.startsWith('https://');
+        return isBase64 || isSafeDataUri || isHttps;
+      });
     } catch {
       // Invalid scenes data
     }
