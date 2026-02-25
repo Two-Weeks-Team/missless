@@ -41,6 +41,7 @@ type Proxy struct {
 	mu            sync.Mutex
 	wg            sync.WaitGroup
 	done          chan struct{}
+	shutdownOnce  sync.Once // ensures initiateShutdown runs exactly once
 	sendToBrowser chan []byte
 	started       bool // guards against duplicate Run calls
 	closed        bool // guards against duplicate Close calls
@@ -69,6 +70,24 @@ func (p *Proxy) SetReconnectParams(client *genai.Client, model string, config *g
 	p.liveConfig = config
 }
 
+// initiateShutdown closes the done channel and live session exactly once,
+// signaling all goroutines to exit. It does NOT wait for goroutines (safe to
+// call from within a goroutine without deadlock).
+func (p *Proxy) initiateShutdown() {
+	p.shutdownOnce.Do(func() {
+		p.mu.Lock()
+		sess := p.liveSession
+		p.liveSession = nil
+		p.mu.Unlock()
+
+		close(p.done)
+
+		if sess != nil {
+			sess.Close()
+		}
+	})
+}
+
 // Run starts the bidirectional proxy forwarding goroutines.
 func (p *Proxy) Run(ctx context.Context) {
 	p.mu.Lock()
@@ -85,10 +104,12 @@ func (p *Proxy) Run(ctx context.Context) {
 	util.SafeGo(func() {
 		defer p.wg.Done()
 		p.forwardBrowserToLive(ctx)
+		p.initiateShutdown() // browser disconnect → unblock siblings
 	})
 	util.SafeGo(func() {
 		defer p.wg.Done()
 		p.forwardLiveToBrowser(ctx)
+		p.initiateShutdown() // live API error → unblock siblings
 	})
 	util.SafeGo(func() {
 		defer p.wg.Done()
@@ -169,6 +190,8 @@ func (p *Proxy) forwardBrowserToLive(ctx context.Context) {
 
 // forwardLiveToBrowser reads from Live API and sends to browser.
 func (p *Proxy) forwardLiveToBrowser(ctx context.Context) {
+	consecutiveErrors := 0
+	const maxConsecutiveErrors = 3
 	for {
 		select {
 		case <-ctx.Done():
@@ -180,6 +203,8 @@ func (p *Proxy) forwardLiveToBrowser(ctx context.Context) {
 
 		session := p.getSession()
 		if session == nil {
+			// Session may be nil during SwapSession — wait for new one.
+			consecutiveErrors = 0
 			time.Sleep(sessionPollInterval)
 			continue
 		}
@@ -193,10 +218,18 @@ func (p *Proxy) forwardLiveToBrowser(ctx context.Context) {
 				return
 			default:
 			}
-			slog.Error("live_receive_error", "error", err)
-			return
+			consecutiveErrors++
+			if consecutiveErrors > maxConsecutiveErrors {
+				slog.Error("live_receive_fatal", "error", err, "consecutive", consecutiveErrors)
+				return
+			}
+			// May be a transient error from SwapSession closing old session — retry.
+			slog.Warn("live_receive_error", "error", err, "consecutive", consecutiveErrors)
+			time.Sleep(sessionPollInterval)
+			continue
 		}
 
+		consecutiveErrors = 0
 		p.handleLiveMessage(ctx, msg)
 	}
 }
@@ -347,15 +380,9 @@ func (p *Proxy) Close() {
 		return
 	}
 	p.closed = true
-	old := p.liveSession
-	p.liveSession = nil
 	p.mu.Unlock()
 
-	close(p.done)
-
-	if old != nil {
-		old.Close()
-	}
+	p.initiateShutdown()
 
 	wgDone := make(chan struct{}, 1)
 	util.SafeGo(func() {
