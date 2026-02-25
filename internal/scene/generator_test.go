@@ -289,6 +289,133 @@ func TestBuildPrompt_NoSilhouetteWithoutImages(t *testing.T) {
 	}
 }
 
+func TestExtractInterleaved_TextAndImage(t *testing.T) {
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{Text: "A warm reunion scene."},
+						{
+							InlineData: &genai.Blob{
+								MIMEType: "image/jpeg",
+								Data:     []byte{0xFF, 0xD8, 0xFF, 0xE0},
+							},
+						},
+						{Text: " The sun sets gently."},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := extractInterleaved(resp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Text == "" {
+		t.Fatal("expected non-empty text")
+	}
+	if result.ImageBase64 == "" {
+		t.Fatal("expected non-empty image")
+	}
+	if !contains(result.Text, "warm reunion") {
+		t.Fatalf("expected text to contain narration, got: %s", result.Text)
+	}
+}
+
+func TestExtractInterleaved_TextOnly(t *testing.T) {
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{
+						{Text: "Only narration, no image."},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := extractInterleaved(resp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Text == "" {
+		t.Fatal("expected non-empty text")
+	}
+	if result.ImageBase64 != "" {
+		t.Fatal("expected empty image for text-only response")
+	}
+}
+
+func TestExtractInterleaved_NilResponse(t *testing.T) {
+	_, err := extractInterleaved(nil)
+	if err == nil {
+		t.Fatal("expected error for nil response")
+	}
+}
+
+func TestExtractInterleaved_NilContent(t *testing.T) {
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{Content: nil},
+		},
+	}
+
+	_, err := extractInterleaved(resp)
+	if err == nil {
+		t.Fatal("expected error for nil content")
+	}
+}
+
+func TestExtractInterleaved_Empty(t *testing.T) {
+	resp := &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Parts: []*genai.Part{},
+				},
+			},
+		},
+	}
+
+	_, err := extractInterleaved(resp)
+	if err == nil {
+		t.Fatal("expected error for empty parts")
+	}
+}
+
+func TestBuildStoryPagePrompt(t *testing.T) {
+	gen := &Generator{anchor: NewCharacterAnchor()}
+
+	prompt := gen.buildStoryPagePrompt("dinner table scene", "warm", "mother and child")
+
+	for _, want := range []string{"story page", "dinner table", "warm", "mother and child", "narration", "watercolor"} {
+		if !contains(prompt, want) {
+			t.Fatalf("expected story page prompt to contain %q, got: %s", want, prompt)
+		}
+	}
+
+	// Verify prompt injection hardening: user inputs wrapped in triple-quote delimiters.
+	if !contains(prompt, `"""dinner table scene"""`) {
+		t.Fatalf("expected triple-quote delimiters around scene input, got: %s", prompt)
+	}
+}
+
+func TestBuildStoryPagePrompt_Minimal(t *testing.T) {
+	gen := &Generator{anchor: NewCharacterAnchor()}
+
+	prompt := gen.buildStoryPagePrompt("park scene", "", "")
+
+	if !contains(prompt, "park scene") {
+		t.Fatalf("expected prompt to contain scene, got: %s", prompt)
+	}
+	if !contains(prompt, "story page") {
+		t.Fatalf("expected prompt to reference story page, got: %s", prompt)
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchSubstring(s, substr)
 }

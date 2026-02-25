@@ -16,6 +16,7 @@ import (
 type AlbumScene struct {
 	ImageURL  string    `json:"imageUrl"`
 	Caption   string    `json:"caption"`
+	Narration string    `json:"narration,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
@@ -75,6 +76,21 @@ func (ag *AlbumGenerator) RecordScene(imageURL, caption string) {
 	})
 
 	slog.Info("album_scene_recorded", "total", len(ag.scenes))
+}
+
+// RecordStoryPage adds a scene with narration from interleaved generation.
+func (ag *AlbumGenerator) RecordStoryPage(imageURL, caption, narration string) {
+	ag.mu.Lock()
+	defer ag.mu.Unlock()
+
+	ag.scenes = append(ag.scenes, AlbumScene{
+		ImageURL:  imageURL,
+		Caption:   caption,
+		Narration: narration,
+		Timestamp: time.Now(),
+	})
+
+	slog.Info("album_story_page_recorded", "total", len(ag.scenes))
 }
 
 // SceneCount returns the number of recorded scenes.

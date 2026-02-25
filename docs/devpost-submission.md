@@ -20,6 +20,7 @@ During the reunion, the AI generates contextual scene images (a kitchen where yo
 - **Voice-first interaction** — 100% voice-based, no text input required
 - **YouTube video analysis** — Gemini 2.5 Pro analyzes personality directly from video URLs (zero-download)
 - **30 HD preset voices** — Automatic voice matching based on analyzed characteristics
+- **Native interleaved output** — Text narration + illustration generated together from a single Gemini call, creating seamless story pages
 - **Progressive image generation** — Flash preview in 1-3 seconds, Imagen 4 HD final in 8-12 seconds
 - **Real-time BGM** — Background music that adapts to conversation mood
 - **Shareable album** — Reunion scenes compiled into a keepsake
@@ -35,9 +36,10 @@ The browser (Next.js 15 PWA) serves as a pure renderer — all AI orchestration 
 3. **Gemini 2.5 Flash Image** — Quick scene previews (1-3s)
 4. **Imagen 4** — High-quality final scene images (8-12s)
 
-### Server-Side Tools (5 tools)
+### Server-Side Tools (6 tools)
 The Live API session uses Tool Calling to trigger server-side actions:
 - `generate_scene` — 2-stage progressive image generation
+- `generate_story_page` — **Native interleaved output** (text narration + illustration from a single Gemini call)
 - `change_atmosphere` — BGM selection and crossfade
 - `recall_memory` — Search persona memories in Firestore for grounded conversation
 - `analyze_user` — Flash Vision analysis of user input
