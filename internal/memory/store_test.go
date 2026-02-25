@@ -6,7 +6,7 @@ import (
 )
 
 func TestMemoryStore_SaveFromAnalysis(t *testing.T) {
-	store := NewStore(100)
+	store := NewStore(100, nil)
 	ctx := context.Background()
 
 	highlights := []AnalysisHighlight{
@@ -26,7 +26,7 @@ func TestMemoryStore_SaveFromAnalysis(t *testing.T) {
 }
 
 func TestMemoryStore_SaveFromAnalysis_Empty(t *testing.T) {
-	store := NewStore(100)
+	store := NewStore(100, nil)
 	ctx := context.Background()
 
 	err := store.SaveFromAnalysis(ctx, "persona-1", nil)
@@ -39,7 +39,7 @@ func TestMemoryStore_SaveFromAnalysis_Empty(t *testing.T) {
 }
 
 func TestMemoryStore_Search_Found(t *testing.T) {
-	store := NewStore(100)
+	store := NewStore(100, nil)
 	ctx := context.Background()
 
 	highlights := []AnalysisHighlight{
@@ -59,7 +59,7 @@ func TestMemoryStore_Search_Found(t *testing.T) {
 }
 
 func TestMemoryStore_Search_NotFound(t *testing.T) {
-	store := NewStore(100)
+	store := NewStore(100, nil)
 	ctx := context.Background()
 
 	highlights := []AnalysisHighlight{
@@ -77,7 +77,7 @@ func TestMemoryStore_Search_NotFound(t *testing.T) {
 }
 
 func TestMemoryStore_Search_EmptyStore(t *testing.T) {
-	store := NewStore(100)
+	store := NewStore(100, nil)
 	ctx := context.Background()
 
 	results, err := store.Search(ctx, "nonexistent", "anything")
@@ -112,7 +112,7 @@ func TestContainsKeyword(t *testing.T) {
 }
 
 func TestMemoryStore_Save_Single(t *testing.T) {
-	store := NewStore(100)
+	store := NewStore(100, nil)
 	ctx := context.Background()
 
 	err := store.Save(ctx, "persona-1", Memory{
@@ -137,7 +137,7 @@ func TestMemoryStore_Save_Single(t *testing.T) {
 }
 
 func TestMemoryStore_MaxLimit(t *testing.T) {
-	store := NewStore(5)
+	store := NewStore(5, nil)
 	ctx := context.Background()
 
 	for i := 0; i < 10; i++ {
@@ -155,7 +155,7 @@ func TestMemoryStore_MaxLimit(t *testing.T) {
 }
 
 func TestMemoryStore_Search_MultiKeyword(t *testing.T) {
-	store := NewStore(100)
+	store := NewStore(100, nil)
 	ctx := context.Background()
 
 	highlights := []AnalysisHighlight{
