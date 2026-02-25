@@ -40,7 +40,7 @@ func main() {
 	mux := http.NewServeMux()
 	sessions := auth.NewSessionStore()
 	handler.RegisterHealth(mux)
-	handler.RegisterWebSocket(mux, cfg)
+	handler.RegisterWebSocket(mux, cfg, sessions)
 	handler.RegisterOAuth(mux, cfg, sessions)
 	handler.RegisterUpload(mux, cfg)
 

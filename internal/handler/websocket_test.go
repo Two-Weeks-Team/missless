@@ -1,8 +1,12 @@
 package handler
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/Two-Weeks-Team/missless/internal/auth"
+	"github.com/Two-Weeks-Team/missless/internal/config"
 	"github.com/Two-Weeks-Team/missless/internal/session"
 	"google.golang.org/genai"
 )
@@ -70,5 +74,46 @@ func TestBuildOnboardingConfig_Modalities(t *testing.T) {
 	// Native-audio model requires audio-only output.
 	if len(cfg.ResponseModalities) != 1 || cfg.ResponseModalities[0] != genai.ModalityAudio {
 		t.Fatalf("expected AUDIO-only modality, got %v", cfg.ResponseModalities)
+	}
+}
+
+func TestWebSocket_AuthRequired_Prod(t *testing.T) {
+	sessions := auth.NewSessionStore()
+	cfg := &config.Config{
+		GeminiAPIKey: "test-key",
+		ProjectID:    "test-project",
+		Environment:  "production",
+		Domain:       "missless.co",
+	}
+
+	req := httptest.NewRequest("GET", "/ws", nil)
+	rec := httptest.NewRecorder()
+
+	handleWebSocket(rec, req, cfg, sessions)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated prod request, got %d", rec.Code)
+	}
+}
+
+func TestWebSocket_AuthSkipped_Dev(t *testing.T) {
+	sessions := auth.NewSessionStore()
+	cfg := &config.Config{
+		GeminiAPIKey: "test-key",
+		ProjectID:    "test-project",
+		Environment:  "development",
+		Domain:       "localhost",
+	}
+
+	req := httptest.NewRequest("GET", "/ws", nil)
+	rec := httptest.NewRecorder()
+
+	// In dev mode, auth is not required. The handler will proceed past auth
+	// and fail at WebSocket upgrade (since this isn't a real WS request),
+	// but it should NOT return 401.
+	handleWebSocket(rec, req, cfg, sessions)
+
+	if rec.Code == http.StatusUnauthorized {
+		t.Fatal("dev mode should not require authentication")
 	}
 }
