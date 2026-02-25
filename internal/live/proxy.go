@@ -331,23 +331,15 @@ func (p *Proxy) sendBinary(data []byte) {
 	}
 }
 
-// Wait blocks until all proxy goroutines have exited or the shutdown timeout elapses.
+// Wait blocks until all proxy goroutines have exited.
+// Use this in the handler to keep the session alive for its full lifetime.
 func (p *Proxy) Wait() {
-	wgDone := make(chan struct{}, 1)
-	util.SafeGo(func() {
-		p.wg.Wait()
-		close(wgDone)
-	})
-
-	select {
-	case <-wgDone:
-		slog.Info("proxy_goroutines_exited")
-	case <-time.After(shutdownTimeout):
-		slog.Warn("proxy_shutdown_timeout")
-	}
+	p.wg.Wait()
+	slog.Info("proxy_goroutines_exited")
 }
 
-// Close terminates the proxy, closes the live session, and waits for goroutines.
+// Close terminates the proxy, closes the live session, and waits for goroutines
+// with a bounded timeout to prevent hanging during shutdown.
 func (p *Proxy) Close() {
 	p.mu.Lock()
 	if p.closed {
@@ -365,5 +357,16 @@ func (p *Proxy) Close() {
 		old.Close()
 	}
 
-	p.Wait()
+	wgDone := make(chan struct{}, 1)
+	util.SafeGo(func() {
+		p.wg.Wait()
+		close(wgDone)
+	})
+
+	select {
+	case <-wgDone:
+		slog.Info("proxy_goroutines_exited")
+	case <-time.After(shutdownTimeout):
+		slog.Warn("proxy_shutdown_timeout")
+	}
 }
