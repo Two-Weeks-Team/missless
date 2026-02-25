@@ -15,7 +15,7 @@ import (
 
 const (
 	// FlashModel is the fast preview image generation model.
-	FlashModel = "gemini-2.5-flash-preview-05-20"
+	FlashModel = "gemini-2.5-flash-image"
 
 	// ProModel is the high-quality final image generation model.
 	ProModel = "imagen-4.0-generate-001"
