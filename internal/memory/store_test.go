@@ -50,7 +50,9 @@ func TestMemoryStore_Search_Found(t *testing.T) {
 		{Timestamp: "1:30", Description: "공원에서 산책하며 대화하는 장면", Expression: "calm"},
 		{Timestamp: "3:00", Description: "카페에서 생일 파티를 하는 모습", Expression: "joyful"},
 	}
-	_ = store.SaveFromAnalysis(ctx, "persona-1", highlights)
+	if err := store.SaveFromAnalysis(ctx, "persona-1", highlights); err != nil {
+		t.Fatalf("SaveFromAnalysis failed: %v", err)
+	}
 
 	results, err := store.Search(ctx, "persona-1", "카페")
 	if err != nil {
@@ -68,7 +70,9 @@ func TestMemoryStore_Search_NotFound(t *testing.T) {
 	highlights := []AnalysisHighlight{
 		{Timestamp: "0:15", Description: "카페에서 함께 커피를 마시며 웃는 모습", Expression: "happy"},
 	}
-	_ = store.SaveFromAnalysis(ctx, "persona-1", highlights)
+	if err := store.SaveFromAnalysis(ctx, "persona-1", highlights); err != nil {
+		t.Fatalf("SaveFromAnalysis failed: %v", err)
+	}
 
 	results, err := store.Search(ctx, "persona-1", "학교")
 	if err != nil {
@@ -133,7 +137,10 @@ func TestMemoryStore_Save_Single(t *testing.T) {
 		t.Fatalf("expected 1 memory, got %d", store.Count("persona-1"))
 	}
 
-	results, _ := store.Search(ctx, "persona-1", "제주도")
+	results, err := store.Search(ctx, "persona-1", "제주도")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 search result, got %d", len(results))
 	}
@@ -144,12 +151,14 @@ func TestMemoryStore_MaxLimit(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 0; i < 10; i++ {
-		_ = store.Save(ctx, "persona-1", Memory{
+		if err := store.Save(ctx, "persona-1", Memory{
 			ID:          "mem",
 			Topic:       "topic",
 			Description: "desc",
 			Source:      "user_input",
-		})
+		}); err != nil {
+			t.Fatalf("Save failed at iteration %d: %v", i, err)
+		}
 	}
 
 	if store.Count("persona-1") != 5 {
@@ -166,7 +175,9 @@ func TestMemoryStore_Search_MultiKeyword(t *testing.T) {
 		{Timestamp: "1:30", Description: "카페에서 커피와 케이크를 먹는 장면", Expression: "calm"},
 		{Timestamp: "3:00", Description: "공원에서 케이크를 먹는 모습", Expression: "joyful"},
 	}
-	_ = store.SaveFromAnalysis(ctx, "persona-1", highlights)
+	if err := store.SaveFromAnalysis(ctx, "persona-1", highlights); err != nil {
+		t.Fatalf("SaveFromAnalysis failed: %v", err)
+	}
 
 	// "카페 케이크" should rank the second highlight highest (matches both).
 	results, err := store.Search(ctx, "persona-1", "카페 케이크")
@@ -481,7 +492,10 @@ func TestMemoryStore_Save_SetsCreatedAt(t *testing.T) {
 	}
 
 	// After save, the stored memory should have a non-zero CreatedAt
-	results, _ := s.Search(ctx, "persona1", "test")
+	results, err := s.Search(ctx, "persona1", "test")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -494,7 +508,9 @@ func TestMemoryStore_Search_EmptyQuery(t *testing.T) {
 	s := NewStore(10, nil)
 	ctx := context.Background()
 
-	_ = s.Save(ctx, "p1", Memory{ID: "1", Topic: "hello", Description: "world"})
+	if err := s.Save(ctx, "p1", Memory{ID: "1", Topic: "hello", Description: "world"}); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
 
 	results, err := s.Search(ctx, "p1", "")
 	if err != nil {
@@ -509,7 +525,9 @@ func TestMemoryStore_Search_WhitespaceOnlyQuery(t *testing.T) {
 	s := NewStore(10, nil)
 	ctx := context.Background()
 
-	_ = s.Save(ctx, "p1", Memory{ID: "1", Topic: "hello", Description: "world"})
+	if err := s.Save(ctx, "p1", Memory{ID: "1", Topic: "hello", Description: "world"}); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
 
 	results, err := s.Search(ctx, "p1", "   ")
 	if err != nil {
@@ -524,11 +542,21 @@ func TestMemoryStore_MultiplePersonas(t *testing.T) {
 	s := NewStore(10, nil)
 	ctx := context.Background()
 
-	_ = s.Save(ctx, "persona-a", Memory{ID: "a1", Topic: "alpha", Description: "first"})
-	_ = s.Save(ctx, "persona-b", Memory{ID: "b1", Topic: "beta", Description: "second"})
+	if err := s.Save(ctx, "persona-a", Memory{ID: "a1", Topic: "alpha", Description: "first"}); err != nil {
+		t.Fatalf("Save persona-a failed: %v", err)
+	}
+	if err := s.Save(ctx, "persona-b", Memory{ID: "b1", Topic: "beta", Description: "second"}); err != nil {
+		t.Fatalf("Save persona-b failed: %v", err)
+	}
 
-	resultsA, _ := s.Search(ctx, "persona-a", "alpha")
-	resultsB, _ := s.Search(ctx, "persona-b", "alpha")
+	resultsA, err := s.Search(ctx, "persona-a", "alpha")
+	if err != nil {
+		t.Fatalf("Search persona-a failed: %v", err)
+	}
+	resultsB, err := s.Search(ctx, "persona-b", "alpha")
+	if err != nil {
+		t.Fatalf("Search persona-b failed: %v", err)
+	}
 
 	if len(resultsA) != 1 {
 		t.Errorf("expected 1 result for persona-a, got %d", len(resultsA))
@@ -552,11 +580,13 @@ func TestMemoryStore_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_ = s.Save(ctx, "shared", Memory{
+			if err := s.Save(ctx, "shared", Memory{
 				ID:          fmt.Sprintf("m-%d", idx),
 				Topic:       "topic",
 				Description: fmt.Sprintf("desc %d", idx),
-			})
+			}); err != nil {
+				t.Errorf("Save failed at idx %d: %v", idx, err)
+			}
 		}(i)
 	}
 
@@ -565,7 +595,9 @@ func TestMemoryStore_ConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = s.Search(ctx, "shared", "topic")
+			if _, err := s.Search(ctx, "shared", "topic"); err != nil {
+				t.Errorf("Search failed: %v", err)
+			}
 		}()
 	}
 
@@ -590,7 +622,9 @@ func TestMemoryStore_ConcurrentSaveFromAnalysis(t *testing.T) {
 				{Timestamp: "0:01", Description: fmt.Sprintf("highlight A for persona %d", idx), Expression: "happy"},
 				{Timestamp: "0:02", Description: fmt.Sprintf("highlight B for persona %d", idx), Expression: "calm"},
 			}
-			_ = s.SaveFromAnalysis(ctx, fmt.Sprintf("persona-%d", idx), highlights)
+			if err := s.SaveFromAnalysis(ctx, fmt.Sprintf("persona-%d", idx), highlights); err != nil {
+				t.Errorf("SaveFromAnalysis failed for persona-%d: %v", idx, err)
+			}
 		}(i)
 	}
 
@@ -612,9 +646,14 @@ func TestMemoryStore_SaveFromAnalysis_IDFormat(t *testing.T) {
 		{Timestamp: "0:20", Description: "second highlight", Expression: "calm"},
 	}
 
-	_ = s.SaveFromAnalysis(ctx, "test-persona", highlights)
+	if err := s.SaveFromAnalysis(ctx, "test-persona", highlights); err != nil {
+		t.Fatalf("SaveFromAnalysis failed: %v", err)
+	}
 
-	results, _ := s.Search(ctx, "test-persona", "highlight")
+	results, err := s.Search(ctx, "test-persona", "highlight")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
@@ -642,9 +681,14 @@ func TestMemoryStore_SaveFromAnalysis_FieldMapping(t *testing.T) {
 		{Timestamp: "1:30", Description: "Beautiful sunset view", Expression: "amazed"},
 	}
 
-	_ = s.SaveFromAnalysis(ctx, "persona-x", highlights)
+	if err := s.SaveFromAnalysis(ctx, "persona-x", highlights); err != nil {
+		t.Fatalf("SaveFromAnalysis failed: %v", err)
+	}
 
-	results, _ := s.Search(ctx, "persona-x", "sunset")
+	results, err := s.Search(ctx, "persona-x", "sunset")
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
