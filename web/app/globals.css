@@ -15,9 +15,12 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: system-ui, -apple-system, sans-serif;
-  overflow: hidden;
   height: 100dvh;
   width: 100dvw;
+}
+
+body.session-active {
+  overflow: hidden;
 }
 
 * {

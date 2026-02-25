@@ -43,7 +43,7 @@ function AlbumContent() {
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>missless</h1>
         <p style={{ fontSize: '1.125rem', color: 'var(--color-muted)' }}>
-          {persona}와의 추억 앨범
+          Reunion Album with {persona}
         </p>
         {albumId && (
           <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginTop: '0.5rem' }}>
@@ -98,7 +98,7 @@ function AlbumContent() {
       ) : (
         <div style={{ textAlign: 'center', marginTop: '4rem' }}>
           <p style={{ fontSize: '1rem', color: 'var(--color-muted)' }}>
-            아직 추억이 없어요. 재회를 시작해보세요.
+            No memories yet. Start a reunion to create them.
           </p>
         </div>
       )}
@@ -109,8 +109,8 @@ function AlbumContent() {
           onClick={() => {
             if (navigator.share) {
               navigator.share({
-                title: `${persona}와의 추억 앨범 | missless`,
-                text: `missless에서 ${persona}와 다시 만났어요.`,
+                title: `Reunion Album with ${persona} | missless`,
+                text: `I reunited with ${persona} on missless.`,
                 url: window.location.href,
               }).catch(() => {});
             } else {
@@ -127,7 +127,7 @@ function AlbumContent() {
             cursor: 'pointer',
           }}
         >
-          공유하기
+          Share
         </button>
       </div>
     </main>

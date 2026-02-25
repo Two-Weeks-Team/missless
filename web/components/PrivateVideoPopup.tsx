@@ -29,11 +29,11 @@ export default function PrivateVideoPopup({ onClose }: PrivateVideoPopupProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <p style={{ fontSize: '1rem', color: 'var(--color-text)', marginBottom: '0.5rem' }}>
-          비공개 영상입니다
+          This video is private or unlisted
         </p>
         <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)', marginBottom: '1.5rem' }}>
-          비공개 또는 미등록 영상은 직접 분석할 수 없어요.
-          공개 영상을 선택하거나, 영상을 직접 업로드해주세요.
+          Private or unlisted videos cannot be analyzed directly.
+          Please select a public video or upload the video file.
         </p>
         <button
           onClick={onClose}
@@ -47,7 +47,7 @@ export default function PrivateVideoPopup({ onClose }: PrivateVideoPopupProps) {
             fontSize: '0.875rem',
           }}
         >
-          확인
+          OK
         </button>
       </div>
     </div>

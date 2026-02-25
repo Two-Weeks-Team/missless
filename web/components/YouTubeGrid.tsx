@@ -35,7 +35,7 @@ export default function YouTubeGrid({ videos, onSelect, onPrivateClick }: YouTub
           color: 'var(--color-text)',
         }}
       >
-        영상을 선택하세요
+        Select a video
       </h2>
       <div
         style={{
@@ -108,7 +108,7 @@ export default function YouTubeGrid({ videos, onSelect, onPrivateClick }: YouTub
                     borderRadius: '0.25rem',
                   }}
                 >
-                  비공개
+                  Private
                 </div>
               )}
             </button>

@@ -52,13 +52,13 @@ export default function SessionTransition({ phase }: SessionTransitionProps) {
               }}
             />
             <p style={{ color: 'var(--color-muted)', fontSize: '1rem' }}>
-              잠시만 기다려주세요...
+              Please wait...
             </p>
           </>
         )}
         {phase === 'ready' && (
           <p style={{ fontSize: '1.25rem', color: 'var(--color-text)' }}>
-            준비되었습니다
+            Ready
           </p>
         )}
       </div>
