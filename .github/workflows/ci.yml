@@ -1,21 +1,26 @@
 # ============================================================
-# missless.co — CI Pipeline
-# Go: vet, staticcheck, race-detected tests
-# Frontend: lint, type-check, build
+# missless — CI Pipeline
+# Go: vet, staticcheck, race-detected tests, build
+# Frontend: type-check, lint, build (Next.js static export)
 # ============================================================
 
 name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   go-ci:
     name: Go CI
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -24,15 +29,15 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-
-      - name: Download dependencies
-        run: go mod download
+          cache: true
 
       - name: Go vet
         run: go vet ./...
 
       - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+        run: |
+          GOBIN="${HOME}/.local/bin" go install honnef.co/go/tools/cmd/staticcheck@latest
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
 
       - name: Staticcheck
         run: staticcheck ./...
@@ -46,6 +51,7 @@ jobs:
   frontend-ci:
     name: Frontend CI
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: web
