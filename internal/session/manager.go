@@ -158,6 +158,7 @@ func (m *Manager) TransitionToReunion(ctx context.Context) error {
 // BuildOnboardingConfig creates the LiveConnectConfig for the onboarding phase.
 // System voice: Aoede (missless host), warm guide in Korean.
 func (m *Manager) BuildOnboardingConfig() *genai.LiveConnectConfig {
+	enableProactive := true
 	return &genai.LiveConnectConfig{
 		ResponseModalities: []genai.Modality{genai.ModalityAudio},
 		SpeechConfig: &genai.SpeechConfig{
@@ -166,6 +167,9 @@ func (m *Manager) BuildOnboardingConfig() *genai.LiveConnectConfig {
 					VoiceName: "Aoede",
 				},
 			},
+		},
+		Proactivity: &genai.ProactivityConfig{
+			ProactiveAudio: &enableProactive,
 		},
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{
