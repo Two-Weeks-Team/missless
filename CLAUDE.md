@@ -84,7 +84,7 @@ missless/
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Backend | Go | 1.22+ |
+| Backend | Go | 1.25+ |
 | Frontend | Next.js (PWA, static export) | 15 |
 | AI SDK | google.golang.org/genai | v1.47.0 |
 | Agent SDK | google.golang.org/adk | v0.5.0 |

@@ -15,7 +15,7 @@
 | Pro 모델명 | `gemini-2.5-pro-preview-03-25` | **`gemini-2.5-pro`** (GA) | [Gemini 모델 페이지](https://ai.google.dev/gemini-api/docs/models) — GA 별칭 사용 권장 |
 | BGM 전략 | Lyria `GenerateContent` 호출 | **프리셋 BGM** (Cloud Storage) | Lyria는 WebSocket 전용 (`client.aio.live.music.connect()`) — [Go SDK에 Lyria 미지원](https://pkg.go.dev/google.golang.org/genai) |
 | YouTube 분석 범위 | 공개+일부공개 | **공개(public)만** | [YouTube Data API](https://developers.google.com/youtube/v3/docs/videos) — unlisted URL은 Gemini FileData로 분석 불가 |
-| Go SDK 시그니처 | `session.Receive(ctx)` 등 | `session.Receive()` 등 | [genai v1.47.0 GoDoc](https://pkg.go.dev/google.golang.org/genai#Session) — ctx 파라미터 제거 |
+| Go SDK 시그니처 | `session.Receive(ctx)` 등 | `session.Receive()` 등 | [genai v1.47.0 GoDoc](https://pkg.go.dev/google.golang.org/genai#Session) — `Session.Receive()`는 처음부터 ctx 파라미터 없음 |
 | Grand Prize 상금 | $50,000 | **$25,000** + 크레딧/티켓/여행비 | [DevPost 공식 규칙](https://geminiliveagentchallenge.devpost.com/rules) |
 | Category Winner | 미기재 | **$10,000** (트랙당 1팀) | DevPost 공식 규칙 |
 | Honorable Mentions | 미기재 | **5×$2,000** | DevPost 공식 규칙 |
