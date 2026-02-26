@@ -45,6 +45,14 @@ func TestManager_StartOnboarding_Config(t *testing.T) {
 		t.Fatalf("expected English greeting in system instruction")
 	}
 
+	// Must have audio transcription enabled.
+	if cfg.InputAudioTranscription == nil {
+		t.Fatal("expected InputAudioTranscription config")
+	}
+	if cfg.OutputAudioTranscription == nil {
+		t.Fatal("expected OutputAudioTranscription config")
+	}
+
 	// Must have tools declared.
 	if len(cfg.Tools) == 0 {
 		t.Fatal("expected tools")
@@ -148,6 +156,14 @@ func TestManager_BuildReunionConfig(t *testing.T) {
 	}
 	if !strings.Contains(sysText, "Warm and caring") {
 		t.Fatalf("expected personality in system instruction")
+	}
+
+	// Must have audio transcription.
+	if cfg.InputAudioTranscription == nil {
+		t.Fatal("expected InputAudioTranscription in reunion config")
+	}
+	if cfg.OutputAudioTranscription == nil {
+		t.Fatal("expected OutputAudioTranscription in reunion config")
 	}
 
 	// Must have tools.

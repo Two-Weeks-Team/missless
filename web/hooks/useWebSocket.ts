@@ -11,7 +11,7 @@ export type ServerMessage =
   | { type: 'analysis_progress'; step: string; percent: number; highlight?: string }
   | { type: 'person_detected'; crops: string[] }
   | { type: 'youtube_videos'; videos: unknown[] }
-  | { type: 'transcript'; role: string; text: string };
+  | { type: 'transcript'; role: string; text: string; finished?: boolean };
 
 export type ClientMessage =
   | { type: 'audio'; data: ArrayBuffer }

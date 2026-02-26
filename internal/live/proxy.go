@@ -274,16 +274,35 @@ func (p *Proxy) handleServerContent(content *genai.LiveServerContent) {
 				p.sendBinary(part.InlineData.Data)
 			}
 			if part.Text != "" && !part.Thought {
-				// Capture non-thinking transcript for analyze_user context.
+				// Capture non-thinking transcript for tool context (analyze_user).
+				// Browser display uses OutputTranscription to avoid duplicates.
 				p.toolHandler.AddTranscript("model", part.Text)
-				// Forward transcript as JSON (skip model thinking/reasoning text).
-				p.sendJSON(map[string]any{
-					"type": "transcript",
-					"role": "model",
-					"text": part.Text,
-				})
 			}
 		}
+	}
+
+	// Forward input transcription (what the user said).
+	if content.InputTranscription != nil && content.InputTranscription.Text != "" {
+		// Only persist finalized user speech to tool context.
+		if content.InputTranscription.Finished {
+			p.toolHandler.AddTranscript("user", content.InputTranscription.Text)
+		}
+		p.sendJSON(map[string]any{
+			"type":     "transcript",
+			"role":     "user",
+			"text":     content.InputTranscription.Text,
+			"finished": content.InputTranscription.Finished,
+		})
+	}
+
+	// Forward output transcription (what the model said, as text).
+	if content.OutputTranscription != nil && content.OutputTranscription.Text != "" {
+		p.sendJSON(map[string]any{
+			"type":     "transcript",
+			"role":     "model",
+			"text":     content.OutputTranscription.Text,
+			"finished": content.OutputTranscription.Finished,
+		})
 	}
 }
 
