@@ -419,6 +419,18 @@ func TestBuildReunionConfig_DefaultEnglish(t *testing.T) {
 	}
 }
 
+func TestBuildReunionConfig_DefaultEnglishWhenLangEmpty(t *testing.T) {
+	mgr := NewManager("test-empty-lang")
+	mgr.SetPersona("Friend", "Kore", "", "Cheerful", "Casual")
+
+	cfg := mgr.BuildReunionConfig()
+	sysText := cfg.SystemInstruction.Parts[0].Text
+
+	if !strings.Contains(sysText, "Speak naturally in English") {
+		t.Fatalf("expected default English language note for empty lang, got: %s", sysText)
+	}
+}
+
 func TestBuildReunionConfig_AffectiveRulesInInstruction(t *testing.T) {
 	mgr := NewManager("test-affective-rules")
 	mgr.SetPersona("Mom", "Sulafat", "ko", "Warm", "Gentle")

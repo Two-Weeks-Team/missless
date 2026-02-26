@@ -368,9 +368,14 @@ func (m *Manager) Shutdown(ctx context.Context) {
 	slog.Info("session_shutdown", "session", m.sessionID)
 }
 
+const (
+	defaultLangCode        = "en"
+	defaultLangInstruction = "Speak naturally in English."
+)
+
 func buildReunionSystemInstruction(name, personality, speechStyle, lang string) string {
-	langNote := "Speak naturally in English."
-	if lang != "" && lang != "en" {
+	langNote := defaultLangInstruction
+	if lang != "" && lang != defaultLangCode {
 		langNote = fmt.Sprintf("Speak naturally in the language code '%s'.", lang)
 	}
 

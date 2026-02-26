@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 
+// Small tolerance for AudioContext.currentTime precision when checking playback end.
+const PLAYBACK_END_TOLERANCE_S = 0.01;
+
 export function useAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef(0);
@@ -41,7 +44,7 @@ export function useAudio() {
 
     source.onended = () => {
       // Mark not playing only when no more queued audio remains.
-      if (ctx.currentTime >= nextStartTimeRef.current - 0.01) {
+      if (ctx.currentTime >= nextStartTimeRef.current - PLAYBACK_END_TOLERANCE_S) {
         setIsPlaying(false);
       }
     };

@@ -26,11 +26,13 @@ let initialState = 'running';
 class MockAudioContext {
   state = initialState;
   sampleRate = 24000;
+  currentTime = 0;
   destination = {};
   resume = mockResume;
   close = mockClose;
   createBuffer = vi.fn(() => ({
     copyToChannel: mockCopyToChannel,
+    duration: 0.1,
   }));
   createBufferSource = vi.fn(() => mockSource);
 
@@ -192,6 +194,11 @@ describe('useAudio', () => {
       result.current.playPCM(pcm);
     });
     expect(result.current.isPlaying).toBe(true);
+
+    // Advance mock currentTime past the scheduled end to simulate playback completion.
+    if (latestContext) {
+      latestContext.currentTime = 1.0;
+    }
 
     // Simulate the source ending
     act(() => {
