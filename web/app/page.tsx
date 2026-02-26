@@ -67,6 +67,7 @@ export default function Home() {
           // Finalize: flush pending partial text into a completed message.
           const pending = pendingMsgRef.current[role];
           const finalText = pending ? pending + text : text;
+          pendingMsgRef.current[role] = null;
           if (finalText) {
             const id = String(msgIdRef.current++);
             setChatMessages((prev) => {
@@ -76,8 +77,12 @@ export default function Home() {
               );
               return [...cleaned, { id, role, text: finalText, finished: true }];
             });
+          } else {
+            // Empty finalize — just clean up the placeholder.
+            setChatMessages((prev) =>
+              prev.filter((m) => !(m.role === role && !m.finished)),
+            );
           }
-          pendingMsgRef.current[role] = null;
         } else {
           // Streaming partial: accumulate and show placeholder.
           const accumulated = (pendingMsgRef.current[role] ?? '') + text;
