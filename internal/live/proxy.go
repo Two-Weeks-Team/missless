@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +46,10 @@ type Proxy struct {
 	sendToBrowser chan []byte
 	started       bool // guards against duplicate Run calls
 	closed        bool // guards against duplicate Close calls
+
+	// Transcription buffers (only accessed from readLive goroutine — no lock needed).
+	inputTransBuf  strings.Builder
+	outputTransBuf strings.Builder
 }
 
 // NewProxy creates a new proxy instance.
@@ -283,27 +288,52 @@ func (p *Proxy) handleServerContent(content *genai.LiveServerContent) {
 
 	// Forward input transcription (what the user said).
 	if content.InputTranscription != nil && content.InputTranscription.Text != "" {
-		// Only persist finalized user speech to tool context.
+		appendTranscriptionChunk(&p.inputTransBuf, content.InputTranscription.Text)
+		accumulated := p.inputTransBuf.String()
+
 		if content.InputTranscription.Finished {
-			p.toolHandler.AddTranscript("user", content.InputTranscription.Text)
+			p.toolHandler.AddTranscript("user", accumulated)
+			p.inputTransBuf.Reset()
 		}
 		p.sendJSON(map[string]any{
 			"type":     "transcript",
 			"role":     "user",
-			"text":     content.InputTranscription.Text,
+			"text":     accumulated,
 			"finished": content.InputTranscription.Finished,
 		})
 	}
 
 	// Forward output transcription (what the model said, as text).
 	if content.OutputTranscription != nil && content.OutputTranscription.Text != "" {
+		appendTranscriptionChunk(&p.outputTransBuf, content.OutputTranscription.Text)
+		accumulated := p.outputTransBuf.String()
+
+		if content.OutputTranscription.Finished {
+			p.outputTransBuf.Reset()
+		}
 		p.sendJSON(map[string]any{
 			"type":     "transcript",
 			"role":     "model",
-			"text":     content.OutputTranscription.Text,
+			"text":     accumulated,
 			"finished": content.OutputTranscription.Finished,
 		})
 	}
+}
+
+// appendTranscriptionChunk appends a transcription delta to a buffer with smart spacing.
+// Gemini Live API sends word-level deltas that may lack leading/trailing spaces.
+func appendTranscriptionChunk(buf *strings.Builder, chunk string) {
+	if buf.Len() == 0 || chunk == "" {
+		buf.WriteString(chunk)
+		return
+	}
+	s := buf.String()
+	lastChar := s[len(s)-1]
+	firstChar := chunk[0]
+	if lastChar != ' ' && lastChar != '\n' && firstChar != ' ' && firstChar != '\n' {
+		buf.WriteByte(' ')
+	}
+	buf.WriteString(chunk)
 }
 
 // handleToolCall executes a tool and sends the response back to Live API.

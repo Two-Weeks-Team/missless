@@ -23,7 +23,6 @@ export default function Home() {
   const [finalSrc, setFinalSrc] = useState<string | null>(null);
   const [transition, setTransition] = useState<TransitionPhase>('idle');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const pendingMsgRef = useRef<{ model: string | null; user: string | null }>({ model: null, user: null });
   const msgIdRef = useRef(0);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -63,41 +62,16 @@ export default function Home() {
         const text = stripMarkdown(msg.text);
         const finished = (msg as { finished?: boolean }).finished ?? false;
 
-        if (finished) {
-          // Finalize: flush pending partial text into a completed message.
-          const pending = pendingMsgRef.current[role];
-          const finalText = pending ? pending + text : text;
-          pendingMsgRef.current[role] = null;
-          if (finalText) {
-            const id = String(msgIdRef.current++);
-            setChatMessages((prev) => {
-              // Remove the in-progress placeholder for this role if present.
-              const cleaned = prev.filter(
-                (m) => !(m.role === role && !m.finished),
-              );
-              return [...cleaned, { id, role, text: finalText, finished: true }];
-            });
-          } else {
-            // Empty finalize — just clean up the placeholder.
-            setChatMessages((prev) =>
-              prev.filter((m) => !(m.role === role && !m.finished)),
-            );
-          }
-        } else {
-          // Streaming partial: accumulate and show placeholder.
-          const accumulated = (pendingMsgRef.current[role] ?? '') + text;
-          pendingMsgRef.current[role] = accumulated;
-          const id = `pending-${role}`;
-          setChatMessages((prev) => {
-            const cleaned = prev.filter(
-              (m) => !(m.role === role && !m.finished),
-            );
-            return [
-              ...cleaned,
-              { id, role, text: accumulated, finished: false },
-            ];
-          });
-        }
+        if (!text) break;
+
+        // Server sends accumulated text — just replace, don't concatenate.
+        const id = finished ? String(msgIdRef.current++) : `pending-${role}`;
+        setChatMessages((prev) => {
+          const cleaned = prev.filter(
+            (m) => !(m.role === role && !m.finished),
+          );
+          return [...cleaned, { id, role, text, finished }];
+        });
         break;
       }
       case 'youtube_videos':
@@ -181,7 +155,6 @@ export default function Home() {
     setFinalSrc(null);
     setTransition('idle');
     setChatMessages([]);
-    pendingMsgRef.current = { model: null, user: null };
     setOnboardingStage('welcome');
     setVideos([]);
     setPersonCrops([]);
