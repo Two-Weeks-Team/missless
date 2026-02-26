@@ -168,6 +168,8 @@ func (m *Manager) BuildOnboardingConfig() *genai.LiveConnectConfig {
 				},
 			},
 		},
+		InputAudioTranscription:  &genai.AudioTranscriptionConfig{},
+		OutputAudioTranscription: &genai.AudioTranscriptionConfig{},
 		Proactivity: &genai.ProactivityConfig{
 			ProactiveAudio: &enableProactive,
 		},
@@ -231,7 +233,9 @@ func (m *Manager) BuildReunionConfig() *genai.LiveConnectConfig {
 				},
 			},
 		},
-		EnableAffectiveDialog: &enableAffective,
+		InputAudioTranscription:  &genai.AudioTranscriptionConfig{},
+		OutputAudioTranscription: &genai.AudioTranscriptionConfig{},
+		EnableAffectiveDialog:    &enableAffective,
 		Proactivity: &genai.ProactivityConfig{
 			ProactiveAudio: &enableProactive,
 		},

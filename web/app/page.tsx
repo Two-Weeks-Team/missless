@@ -9,24 +9,22 @@ import SceneDisplay from '../components/SceneDisplay';
 import SessionTransition from '../components/SessionTransition';
 import OnboardingFlow, { type OnboardingStage } from '../components/OnboardingFlow';
 import BGMPlayer from '../components/BGMPlayer';
+import ChatPanel, { type ChatMessage } from '../components/ChatPanel';
+import StatusHUD from '../components/StatusHUD';
+import ActionsHUD from '../components/ActionsHUD';
 import type { YouTubeVideo } from '../components/YouTubeGrid';
 import type { Highlight } from '../components/HighlightCard';
 
 type TransitionPhase = 'idle' | 'transitioning' | 'ready';
-
-const CONNECTION_COLORS: Record<string, string> = {
-  connected: '#4ade80',
-  connecting: '#fbbf24',
-  disconnected: '#ef4444',
-  error: '#ef4444',
-};
 
 export default function Home() {
   const [started, setStarted] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [finalSrc, setFinalSrc] = useState<string | null>(null);
   const [transition, setTransition] = useState<TransitionPhase>('idle');
-  const [transcript, setTranscript] = useState<string>('');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const pendingMsgRef = useRef<{ model: string | null; user: string | null }>({ model: null, user: null });
+  const msgIdRef = useRef(0);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Onboarding state
@@ -38,7 +36,7 @@ export default function Home() {
   const [analysisPercent, setAnalysisPercent] = useState(0);
   const [bgmUrl, setBgmUrl] = useState<string | null>(null);
 
-  const { initAudioContext, playPCM, cleanup: cleanupAudio } = useAudio();
+  const { initAudioContext, playPCM, isPlaying, cleanup: cleanupAudio } = useAudio();
   const mic = useMicrophone();
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -60,9 +58,43 @@ export default function Home() {
         setTransition('ready');
         setOnboardingStage('reunion');
         break;
-      case 'transcript':
-        setTranscript(stripMarkdown(msg.text));
+      case 'transcript': {
+        const role = (msg as { role: string }).role as 'model' | 'user';
+        const text = stripMarkdown(msg.text);
+        const finished = (msg as { finished?: boolean }).finished ?? false;
+
+        if (finished) {
+          // Finalize: flush pending partial text into a completed message.
+          const pending = pendingMsgRef.current[role];
+          const finalText = pending ? pending + text : text;
+          if (finalText) {
+            const id = String(msgIdRef.current++);
+            setChatMessages((prev) => {
+              // Remove the in-progress placeholder for this role if present.
+              const cleaned = prev.filter(
+                (m) => !(m.role === role && !m.finished),
+              );
+              return [...cleaned, { id, role, text: finalText, finished: true }];
+            });
+          }
+          pendingMsgRef.current[role] = null;
+        } else {
+          // Streaming partial: accumulate and show placeholder.
+          const accumulated = (pendingMsgRef.current[role] ?? '') + text;
+          pendingMsgRef.current[role] = accumulated;
+          const id = `pending-${role}`;
+          setChatMessages((prev) => {
+            const cleaned = prev.filter(
+              (m) => !(m.role === role && !m.finished),
+            );
+            return [
+              ...cleaned,
+              { id, role, text: accumulated, finished: false },
+            ];
+          });
+        }
         break;
+      }
       case 'youtube_videos':
         setVideos(msg.videos as YouTubeVideo[]);
         setOnboardingStage('youtube_grid');
@@ -143,7 +175,8 @@ export default function Home() {
     setPreviewSrc(null);
     setFinalSrc(null);
     setTransition('idle');
-    setTranscript('');
+    setChatMessages([]);
+    pendingMsgRef.current = { model: null, user: null };
     setOnboardingStage('welcome');
     setVideos([]);
     setPersonCrops([]);
@@ -371,64 +404,14 @@ export default function Home() {
         onSelectPerson={handleSelectPerson}
       />
 
-      {/* Connection indicator */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '1rem',
-          right: '1rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          zIndex: 10,
-        }}
-      >
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: CONNECTION_COLORS[state] ?? '#ef4444',
-          }}
-        />
-        <span style={{ fontSize: '0.75rem', color: 'var(--color-muted)' }}>
-          {state}
-        </span>
-        {mic.isRecording && (
-          <div
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: '#ef4444',
-              animation: 'pulse 1.5s infinite',
-            }}
-            title="Microphone active"
-          />
-        )}
-      </div>
-
-      {/* Transcript overlay */}
-      {transcript && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '6rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            maxWidth: '80%',
-            padding: '0.75rem 1.5rem',
-            background: 'rgba(0,0,0,0.6)',
-            borderRadius: '1rem',
-            color: 'var(--color-text)',
-            fontSize: '1rem',
-            textAlign: 'center',
-            zIndex: 10,
-          }}
-        >
-          {transcript}
-        </div>
-      )}
+      <StatusHUD
+        connection={state}
+        isRecording={mic.isRecording}
+        isPlaying={isPlaying}
+        sessionState={onboardingStage}
+      />
+      <ActionsHUD sessionState={onboardingStage} />
+      <ChatPanel messages={chatMessages} />
 
       {/* Stop button */}
       <button

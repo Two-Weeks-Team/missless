@@ -285,6 +285,27 @@ func (p *Proxy) handleServerContent(content *genai.LiveServerContent) {
 			}
 		}
 	}
+
+	// Forward input transcription (what the user said).
+	if content.InputTranscription != nil && content.InputTranscription.Text != "" {
+		p.toolHandler.AddTranscript("user", content.InputTranscription.Text)
+		p.sendJSON(map[string]any{
+			"type":     "transcript",
+			"role":     "user",
+			"text":     content.InputTranscription.Text,
+			"finished": content.InputTranscription.Finished,
+		})
+	}
+
+	// Forward output transcription (what the model said, as text).
+	if content.OutputTranscription != nil && content.OutputTranscription.Text != "" {
+		p.sendJSON(map[string]any{
+			"type":     "transcript",
+			"role":     "model",
+			"text":     content.OutputTranscription.Text,
+			"finished": content.OutputTranscription.Finished,
+		})
+	}
 }
 
 // handleToolCall executes a tool and sends the response back to Live API.
