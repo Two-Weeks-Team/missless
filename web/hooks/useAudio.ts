@@ -1,13 +1,18 @@
 import { useCallback, useRef, useState } from 'react';
 
+// Small tolerance for AudioContext.currentTime precision when checking playback end.
+const PLAYBACK_END_TOLERANCE_S = 0.01;
+
 export function useAudio() {
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const nextStartTimeRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Must be called from user gesture (touch/click) on mobile
   const initAudioContext = useCallback(() => {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioContext({ sampleRate: 24000 });
+      nextStartTimeRef.current = 0;
     }
     if (audioCtxRef.current.state === 'suspended') {
       audioCtxRef.current.resume();
@@ -31,14 +36,26 @@ export function useAudio() {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
-    source.onended = () => setIsPlaying(false);
-    source.start();
+
+    // Schedule sequentially to prevent overlap.
+    const now = ctx.currentTime;
+    const startAt = Math.max(now, nextStartTimeRef.current);
+    nextStartTimeRef.current = startAt + buffer.duration;
+
+    source.onended = () => {
+      // Mark not playing only when no more queued audio remains.
+      if (ctx.currentTime >= nextStartTimeRef.current - PLAYBACK_END_TOLERANCE_S) {
+        setIsPlaying(false);
+      }
+    };
+    source.start(startAt);
     setIsPlaying(true);
   }, []);
 
   const cleanup = useCallback(() => {
     audioCtxRef.current?.close();
     audioCtxRef.current = null;
+    nextStartTimeRef.current = 0;
   }, []);
 
   return { initAudioContext, playPCM, isPlaying, cleanup };
