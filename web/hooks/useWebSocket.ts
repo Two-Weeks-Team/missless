@@ -11,14 +11,18 @@ export type ServerMessage =
   | { type: 'analysis_progress'; step: string; percent: number; highlight?: string }
   | { type: 'person_detected'; crops: string[] }
   | { type: 'youtube_videos'; videos: unknown[] }
-  | { type: 'transcript'; role: string; text: string; finished?: boolean };
+  | { type: 'transcript'; role: string; text: string; finished?: boolean }
+  | { type: 'session_conflict'; message: string }
+  | { type: 'session_taken'; message: string };
 
 export type ClientMessage =
   | { type: 'audio'; data: ArrayBuffer }
   | { type: 'audio_stream_end' }
   | { type: 'select_video'; videoId: string }
   | { type: 'select_person'; personIndex: number }
-  | { type: 'upload_video'; data: ArrayBuffer };
+  | { type: 'upload_video'; data: ArrayBuffer }
+  | { type: 'take_over' }
+  | { type: 'cancel_takeover' };
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error';
 

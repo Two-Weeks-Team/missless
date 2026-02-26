@@ -25,6 +25,7 @@ export default function Home() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const msgIdRef = useRef(0);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sessionConflict, setSessionConflict] = useState(false);
 
   // Onboarding state
   const [onboardingStage, setOnboardingStage] = useState<OnboardingStage>('welcome');
@@ -104,6 +105,13 @@ export default function Home() {
           }
         }
         break;
+      case 'session_conflict':
+        setSessionConflict(true);
+        break;
+      case 'session_taken':
+        // This tab was disconnected by another tab taking over.
+        handleStop();
+        break;
     }
   }, [playPCM]);
 
@@ -138,12 +146,31 @@ export default function Home() {
     initAudioContext();
     connect();
     setStarted(true);
+    setSessionConflict(false);
     // Start microphone after a short delay to ensure WebSocket is connected.
     setTimeout(() => {
       mic.start((pcm) => {
         send({ type: 'audio', data: pcm });
       });
     }, 500);
+  };
+
+  const handleTakeOver = () => {
+    send({ type: 'take_over' });
+    setSessionConflict(false);
+    // Mic starts after the server completes the takeover and session is live.
+    setTimeout(() => {
+      mic.start((pcm) => {
+        send({ type: 'audio', data: pcm });
+      });
+    }, 1000);
+  };
+
+  const handleCancelTakeOver = () => {
+    send({ type: 'cancel_takeover' });
+    setSessionConflict(false);
+    disconnect();
+    setStarted(false);
   };
 
   const handleStop = () => {
@@ -390,6 +417,68 @@ export default function Home() {
       />
       <ActionsHUD sessionState={onboardingStage} />
       <ChatPanel messages={chatMessages} />
+
+      {/* Session conflict dialog */}
+      {sessionConflict && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--color-surface)',
+              borderRadius: '1rem',
+              padding: '2rem',
+              maxWidth: '360px',
+              textAlign: 'center',
+            }}
+          >
+            <h3 style={{ fontSize: '1.125rem', marginBottom: '0.75rem', fontWeight: 600 }}>
+              Active Session Detected
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-muted)', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+              Another tab already has an active session. Would you like to take over here?
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                onClick={handleTakeOver}
+                style={{
+                  padding: '0.5rem 1.5rem',
+                  fontSize: '0.875rem',
+                  background: 'var(--color-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '1.5rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Use This Tab
+              </button>
+              <button
+                onClick={handleCancelTakeOver}
+                style={{
+                  padding: '0.5rem 1.5rem',
+                  fontSize: '0.875rem',
+                  background: 'transparent',
+                  color: 'var(--color-text)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '1.5rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stop button */}
       <button

@@ -2,9 +2,11 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -33,6 +35,14 @@ var activeWSConns atomic.Int64
 // ActiveWSCount returns the current number of active WebSocket connections (for testing/monitoring).
 func ActiveWSCount() int64 {
 	return activeWSConns.Load()
+}
+
+// activeSession tracks the single active browser WebSocket session.
+// Only one browser tab can hold the session at a time.
+var activeSession struct {
+	mu   sync.Mutex
+	conn *websocket.Conn
+	done chan struct{} // closed when the active session ends
 }
 
 // newUpgrader creates a WebSocket upgrader with origin checking based on environment.
@@ -88,6 +98,26 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 
 	activeWSConns.Add(1)
 	defer activeWSConns.Add(-1)
+
+	// Check for existing active session and handle conflict.
+	if !handleSessionConflict(conn) {
+		return // user chose to cancel
+	}
+	// Register this connection as the active session.
+	doneCh := make(chan struct{})
+	activeSession.mu.Lock()
+	activeSession.conn = conn
+	activeSession.done = doneCh
+	activeSession.mu.Unlock()
+	defer func() {
+		activeSession.mu.Lock()
+		if activeSession.conn == conn {
+			activeSession.conn = nil
+			activeSession.done = nil
+		}
+		activeSession.mu.Unlock()
+		close(doneCh)
+	}()
 
 	slog.Info("websocket_connected",
 		"remote", r.RemoteAddr,
@@ -183,4 +213,68 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 	defer shutdownCancel()
 	mgr.Shutdown(shutdownCtx)
 	slog.Info("session_ended", "remote", r.RemoteAddr)
+}
+
+// handleSessionConflict checks if another tab already holds a session.
+// If so, it sends a session_conflict message and waits for the user to decide.
+// Returns true if this connection should proceed, false if it should abort.
+func handleSessionConflict(newConn *websocket.Conn) bool {
+	activeSession.mu.Lock()
+	oldConn := activeSession.conn
+	oldDone := activeSession.done
+	activeSession.mu.Unlock()
+
+	if oldConn == nil {
+		return true // no conflict
+	}
+
+	slog.Info("session_conflict_detected")
+
+	// Notify new tab about the conflict.
+	_ = newConn.WriteJSON(map[string]string{
+		"type":    "session_conflict",
+		"message": "Another tab already has an active session.",
+	})
+
+	// Wait for user decision (take_over or cancel) with timeout.
+	newConn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_, raw, err := newConn.ReadMessage()
+	newConn.SetReadDeadline(time.Time{}) // clear deadline
+	if err != nil {
+		slog.Info("session_conflict_timeout_or_error", "error", err)
+		return false
+	}
+
+	var decision struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(raw, &decision); err != nil {
+		return false
+	}
+
+	if decision.Type != "take_over" {
+		slog.Info("session_conflict_cancelled")
+		return false
+	}
+
+	// Take over: close the old connection and wait for it to finish.
+	slog.Info("session_conflict_takeover")
+
+	// Notify old tab that it's being disconnected.
+	_ = oldConn.WriteJSON(map[string]string{
+		"type":    "session_taken",
+		"message": "Session transferred to another tab.",
+	})
+	_ = oldConn.Close()
+
+	// Wait for old session to clean up (max 5s).
+	if oldDone != nil {
+		select {
+		case <-oldDone:
+		case <-time.After(5 * time.Second):
+			slog.Warn("session_conflict_takeover_timeout")
+		}
+	}
+
+	return true
 }
