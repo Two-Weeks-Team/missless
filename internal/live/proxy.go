@@ -273,10 +273,10 @@ func (p *Proxy) handleServerContent(content *genai.LiveServerContent) {
 				// Forward PCM audio as binary to browser
 				p.sendBinary(part.InlineData.Data)
 			}
-			if part.Text != "" {
-				// Capture transcript for analyze_user context.
+			if part.Text != "" && !part.Thought {
+				// Capture non-thinking transcript for analyze_user context.
 				p.toolHandler.AddTranscript("model", part.Text)
-				// Forward transcript as JSON
+				// Forward transcript as JSON (skip model thinking/reasoning text).
 				p.sendJSON(map[string]any{
 					"type": "transcript",
 					"role": "model",
