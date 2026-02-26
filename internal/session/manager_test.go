@@ -33,7 +33,7 @@ func TestManager_StartOnboarding_Config(t *testing.T) {
 		t.Fatalf("expected AUDIO-only modality, got %v", cfg.ResponseModalities)
 	}
 
-	// System instruction must mention Korean greeting.
+	// System instruction must mention missless and welcome.
 	if cfg.SystemInstruction == nil || len(cfg.SystemInstruction.Parts) == 0 {
 		t.Fatal("expected system instruction")
 	}
