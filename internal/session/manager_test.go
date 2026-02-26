@@ -41,8 +41,8 @@ func TestManager_StartOnboarding_Config(t *testing.T) {
 	if !strings.Contains(sysText, "missless") {
 		t.Fatalf("expected system instruction to mention 'missless', got: %s", sysText)
 	}
-	if !strings.Contains(sysText, "환영") {
-		t.Fatalf("expected Korean greeting in system instruction")
+	if !strings.Contains(sysText, "welcome") {
+		t.Fatalf("expected English greeting in system instruction")
 	}
 
 	// Must have tools declared.
@@ -111,13 +111,13 @@ func TestManager_Transition_NotifyBrowser(t *testing.T) {
 		t.Fatalf("expected 2 events (session_transition + session_ready), got %d", len(events))
 	}
 
-	// First: session_transition with "눈 감아보세요".
+	// First: session_transition with "Close your eyes".
 	if events[0]["type"] != "session_transition" {
 		t.Fatalf("expected type 'session_transition', got %q", events[0]["type"])
 	}
 	msg, _ := events[0]["message"].(string)
-	if !strings.Contains(msg, "눈을 감아보세요") {
-		t.Fatalf("expected '눈을 감아보세요' in message, got %q", msg)
+	if !strings.Contains(msg, "Close your eyes") {
+		t.Fatalf("expected 'Close your eyes' in message, got %q", msg)
 	}
 
 	// Second: session_ready.
@@ -392,18 +392,30 @@ func TestBuildReunionConfig_FallbackVoice(t *testing.T) {
 	}
 }
 
-func TestBuildReunionConfig_NonKoreanLang(t *testing.T) {
+func TestBuildReunionConfig_NonEnglishLang(t *testing.T) {
+	mgr := NewManager("test-ko-lang")
+	mgr.SetPersona("Friend", "Kore", "ko", "Cheerful", "Casual")
+
+	cfg := mgr.BuildReunionConfig()
+	sysText := cfg.SystemInstruction.Parts[0].Text
+
+	if strings.Contains(sysText, "Speak naturally in English") {
+		t.Fatalf("expected non-English language note for lang='ko'")
+	}
+	if !strings.Contains(sysText, "'ko'") {
+		t.Fatalf("expected language code 'ko' in system instruction, got: %s", sysText)
+	}
+}
+
+func TestBuildReunionConfig_DefaultEnglish(t *testing.T) {
 	mgr := NewManager("test-en-lang")
 	mgr.SetPersona("Friend", "Kore", "en", "Cheerful", "Casual")
 
 	cfg := mgr.BuildReunionConfig()
 	sysText := cfg.SystemInstruction.Parts[0].Text
 
-	if strings.Contains(sysText, "Korean") {
-		t.Fatalf("expected non-Korean language note for lang='en'")
-	}
-	if !strings.Contains(sysText, "'en'") {
-		t.Fatalf("expected language code 'en' in system instruction, got: %s", sysText)
+	if !strings.Contains(sysText, "Speak naturally in English") {
+		t.Fatalf("expected default English language note for lang='en', got: %s", sysText)
 	}
 }
 

@@ -131,10 +131,10 @@ func (m *Manager) TransitionToReunion(ctx context.Context) error {
 		return fmt.Errorf("transition to transitioning: %w", err)
 	}
 
-	// Notify browser: "잠시 눈을 감아보세요..."
+	// Notify browser: transition message.
 	m.notify(map[string]any{
 		"type":    "session_transition",
-		"message": "잠시 눈을 감아보세요...",
+		"message": "Close your eyes for a moment...",
 		"persona": m.PersonaName(),
 		"voice":   m.MatchedVoice(),
 	})
@@ -156,7 +156,7 @@ func (m *Manager) TransitionToReunion(ctx context.Context) error {
 }
 
 // BuildOnboardingConfig creates the LiveConnectConfig for the onboarding phase.
-// System voice: Aoede (missless host), warm guide in Korean.
+// System voice: Aoede (missless host), warm English guide.
 func (m *Manager) BuildOnboardingConfig() *genai.LiveConnectConfig {
 	enableProactive := true
 	return &genai.LiveConnectConfig{
@@ -177,14 +177,14 @@ func (m *Manager) BuildOnboardingConfig() *genai.LiveConnectConfig {
 You help users reconnect with people they miss through AI-powered conversations.
 
 During onboarding:
-1. Greet the user warmly: "안녕하세요, missless에 오신 걸 환영해요"
+1. Greet the user warmly: "Hi there, welcome to missless"
 2. Ask who they'd like to reconnect with (name and relationship)
 3. Guide them to select YouTube videos of that person
-4. Share progress while analyzing: "영상을 분석하고 있어요, 잠시만 기다려주세요"
+4. Share progress while analyzing: "I'm analyzing the videos now, just a moment"
 5. Confirm persona creation when ready
 
 Be gentle, understanding, and supportive. This is an emotional experience.
-Speak naturally in Korean unless the user prefers another language.
+Speak naturally in English unless the user prefers another language.
 Keep responses concise for voice — avoid long monologues.`),
 			},
 		},
@@ -293,7 +293,7 @@ func (m *Manager) StartReunionTimer() <-chan time.Time {
 		m.notify(map[string]any{
 			"type":      "reunion_warning",
 			"remaining": int(remaining.Seconds()),
-			"message":   "1분 후 대화가 종료됩니다",
+			"message":   "The conversation will end in 1 minute",
 		})
 	})
 
@@ -369,8 +369,8 @@ func (m *Manager) Shutdown(ctx context.Context) {
 }
 
 func buildReunionSystemInstruction(name, personality, speechStyle, lang string) string {
-	langNote := "Speak naturally in Korean."
-	if lang != "" && lang != "ko" {
+	langNote := "Speak naturally in English."
+	if lang != "" && lang != "en" {
 		langNote = fmt.Sprintf("Speak naturally in the language code '%s'.", lang)
 	}
 
