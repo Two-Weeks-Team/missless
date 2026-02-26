@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWebSocket, ServerMessage } from '../hooks/useWebSocket';
 import { useAudio } from '../hooks/useAudio';
+import { useMicrophone } from '../hooks/useMicrophone';
+import { stripMarkdown } from '../lib/stripMarkdown';
 import SceneDisplay from '../components/SceneDisplay';
 import SessionTransition from '../components/SessionTransition';
 import OnboardingFlow, { type OnboardingStage } from '../components/OnboardingFlow';
@@ -37,6 +39,7 @@ export default function Home() {
   const [bgmUrl, setBgmUrl] = useState<string | null>(null);
 
   const { initAudioContext, playPCM, cleanup: cleanupAudio } = useAudio();
+  const mic = useMicrophone();
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -58,7 +61,7 @@ export default function Home() {
         setOnboardingStage('reunion');
         break;
       case 'transcript':
-        setTranscript(msg.text);
+        setTranscript(stripMarkdown(msg.text));
         break;
       case 'youtube_videos':
         setVideos(msg.videos as YouTubeVideo[]);
@@ -124,9 +127,16 @@ export default function Home() {
     initAudioContext();
     connect();
     setStarted(true);
+    // Start microphone after a short delay to ensure WebSocket is connected.
+    setTimeout(() => {
+      mic.start((pcm) => {
+        send({ type: 'audio', data: pcm });
+      });
+    }, 500);
   };
 
   const handleStop = () => {
+    mic.stop();
     disconnect();
     cleanupAudio();
     setStarted(false);
@@ -384,6 +394,18 @@ export default function Home() {
         <span style={{ fontSize: '0.75rem', color: 'var(--color-muted)' }}>
           {state}
         </span>
+        {mic.isRecording && (
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: '#ef4444',
+              animation: 'pulse 1.5s infinite',
+            }}
+            title="Microphone active"
+          />
+        )}
       </div>
 
       {/* Transcript overlay */}

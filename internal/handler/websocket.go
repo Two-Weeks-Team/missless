@@ -147,7 +147,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request, cfg *config.Config,
 	// Send initial greeting trigger so the model speaks first.
 	err = liveSession.SendClientContent(genai.LiveClientContentInput{
 		Turns: []*genai.Content{
-			genai.NewContentFromText("(The user just connected. Please greet them warmly.)", "user"),
+			genai.NewContentFromText("Hello!", "user"),
 		},
 	})
 	if err != nil {
